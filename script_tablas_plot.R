@@ -21,3 +21,4 @@ mcmc_combo(dat1)
 
 library(forecast)
 ggAcf(dat1[,1])
+ggAcf(dat1[,2])
