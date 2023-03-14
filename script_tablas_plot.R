@@ -20,5 +20,8 @@ mcmc_combo(dat1)
 #grafico ACF
 
 library(forecast)
-ggAcf(dat1[,1])
-ggAcf(dat1[,2])
+library(ggplot2)
+
+ggAcf(dat1$mu) + labs(title = "Cadenas para mu",x = "retardos")
+ggAcf(dat1$sigma)+ labs(title = "Cadenas para sigma",x = "retardos")
+ggAcf(dat1$x)+ labs(title = "Cadenas para x",x = "retardos")
