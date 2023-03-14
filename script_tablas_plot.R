@@ -16,3 +16,8 @@ dat1 = subset_draws(dat, iteration =1000:18000)
 xtable(summarise_draws(dat1))
 # Grafico
 mcmc_combo(dat1)
+
+#grafico ACF
+
+library(forecast)
+ggAcf(dat1[,1])
