@@ -13,7 +13,7 @@
 #' @param G the transition matrix in the states equation.
 #' @param n is the length of the data set n = length(y_t)
 #' @param m is the dimension of the data yt in R^m
-#' @param p is the dimension of the state parameters mu_t in R^p
+#' @param p is the dimension of the state parameters mu_t in R^p.
 #' @param data a matrix of dimensions m rows and n cols containing the data set.
 #' @param samples an integer with the amount of samples for approximating the
 #' latent distribution of mu_t | y_t.
