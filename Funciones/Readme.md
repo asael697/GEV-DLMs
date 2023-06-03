@@ -26,7 +26,7 @@ Los datos se simulan mediante el siguiente codigo:
     ggplot(data.frame(y),aes(x = y))+geom_histogram(bins = 20)+
       labs(x = "y",y = "conteo",title = "Histograma de los datos simulados y")
 
-![](Readme_files/figure-markdown_strict/unnamed-chunk-2-1.png)
+![](Readme_files/unnamed-chunk-2-1.png)
 
 Ahora bien, previo a la estimacion de los parametros, actualizamos las
 funciones `loglik()`, `log_prior()` y `inits()` para que calculen la
@@ -94,7 +94,7 @@ aceptamos las simulaciones obtenidas del algoritmo
 
     mcmc_combo(post_df,pars = c("mu","sigma"))
 
-![](Readme_files/figure-markdown_strict/unnamed-chunk-6-1.png)
+![](Readme_files/unnamed-chunk-6-1.png)
 
 Revisar el ajuste de los datos es una buena praxis para validar los
 supuestos del modelo, para eso es necesario realizar posterior
@@ -110,13 +110,13 @@ el modelo provee un buen ajuste de los datos.
     s = sample(1:40000,size = 500)
     ppc_dens_overlay(y = y,yrep = t(y_rep)[s,])
 
-![](Readme_files/figure-markdown_strict/unnamed-chunk-7-1.png)
+![](Readme_files/unnamed-chunk-7-1.png)
 
 Finalmente, realizamos validacion cruzada para determinar el ajuste del
 modelo, para eso es necesario computar la matriz de de
 log-verosimilitud, al aproximar la elpd (Expected log-predictive
 density) notamos que no hay advertencias de un mal ajusto de los valores
-de pareto, por lo tanto aceptamos el modelo propuesto.
+de Pareto, por lo tanto aceptamos el modelo propuesto.
 
     LL = log_lik(y,post1,sum = FALSE)
 
