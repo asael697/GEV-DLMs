@@ -213,11 +213,11 @@ target <- function(y,theta){
 #' @return a matrix of dimension ncols n = length(y) and nrows = iter,
 #' with the evaluated log_likelihood.
 #' 
-log_lik <- function(y,post){
+log_lik <- function(y,post,sum  = FALSE){
   
   LL = apply(post, 1, function(z){
     z = as.numeric(z)
-    loglik(y,z)
+    loglik(y,z,sum)
   })
   t(LL)
 }
