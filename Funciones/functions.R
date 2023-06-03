@@ -93,31 +93,32 @@ FFBS <- function(m0 = 0, C0 = 0.6, FF = 1, G = 1, V = 1,
 #' @param burnin an integer for the first iterations to be burned in warm-up
 #' iterations.
 #' @param lag the amount of lags to be burnned for avoid stucked jumps
-#' @param d integer obtaining the parameter's dimension.
 #' 
 #' @author Asael Alonzo Matamoros
 #' 
 #' @return an data frame with the simulated posteriors
 #' 
 metropolis_sampler <- function(y,chains = 4, iter = 5000, scale = 0.5,
-                               burnin = 5000, lag = 5,d = 1) {
+                               burnin = 5000, lag = 5) {
   
   post = NULL
   for(k in 1:chains){
     results = NULL
-    current_state = inits(y,d)
+    current_state = inits()
     # burn-in
     for(i in 1:burnin) {
-      out = metropolis_step(y,current_state, scale)
-      current_state = out
+      out = metropolis_step(y,current_state,scale)
+      current_state = out$value
     }
     # sample
     for(i in 1:iter) {
+      cont = 0
       for(j in 1:lag) {
-        out = metropolis_step(y,current_state, scale)
-        current_state = out
+        out = metropolis_step(y,current_state,scale)
+        current_state = out$value
+        cont = cont + out$reject
       }
-      results = rbind(results,out)
+      results = rbind(results,c(out$value, out$reject))
     }
    post = rbind(post,results) 
   }
@@ -145,42 +146,25 @@ metropolis_sampler <- function(y,chains = 4, iter = 5000, scale = 0.5,
 #' @return a vector with the proposed jump
 #' 
 metropolis_step <- function(y,prop, scale) {
-  
-  proposed = MASS::mvrnorm(n = 1, mu = prop,Sigma = scale)
-  
+  reject = 1
+  proposed = rjump(prop = prop,scale = scale)
+
   u  =  runif(1)
-  accept_prob = min(1, target(y,proposed) / (target(y,prop)))
+  t1 = target(y,proposed) + djump(proposed,prop,scale) 
+  t2 = target(y,prop) + djump(prop,proposed, scale) 
+  et = exp(t1 - t2)
+  et = ifelse(is.na(et),0,et)
+  accept_prob = min(1,et)
   
   if(u <= accept_prob){
     value = proposed
+    reject = 0
   }else{
     value = prop
   }
-  return(value)
-}
-#' Initial values simulation
-#' 
-#' Generates valid initial values for a parameter of dimension d
-#' 
-#' @param y a matrx with the used data for estimating the posterior.
-#' @param d an integer with the parameter;s dimension
-#' 
-#' This function generates initial values using a multivariate normal
-#' distribution and validates them using the `target()` function.
-#' 
-#' @author Asael Alonzo Matamoros
-#' 
-#' @return a vector with the simulated initial valutes for the 
-#' Metropolis steps
-#' 
-inits <- function(y,d = 1){
   
-  x = MASS::mvrnorm(n = 1, mu = rep(0,d),Sigma = diag(rep(1,d)))
-  t = target(y,x)
-  while( is.na(t) || t <= 0){
-    x = MASS::mvrnorm(n = 1, mu = rep(0,d),Sigma = diag(rep(1,d)))
-  }
-  return(x)
+  out = list(value = value,reject = reject)
+  return(out)
 }
 
 #' Evaluates the target function in a metropolis step
@@ -199,7 +183,7 @@ inits <- function(y,d = 1){
 target <- function(y,theta){
   
   t = loglik(y,theta) + log_prior(theta)
-  return(exp(t))
+  return(t)
 }
 
 #' Computes the Log_likelihood matrix 
@@ -213,11 +197,11 @@ target <- function(y,theta){
 #' @return a matrix of dimension ncols n = length(y) and nrows = iter,
 #' with the evaluated log_likelihood.
 #' 
-log_lik <- function(y,post,sum  = FALSE){
+log_lik <- function(y,post){
   
   LL = apply(post, 1, function(z){
     z = as.numeric(z)
-    loglik(y,z,sum)
+    gev_lpdf(y,mu = z[1],sigma = z[2],k = z[3])
   })
   t(LL)
 }
@@ -232,4 +216,127 @@ log_lik <- function(y,post,sum  = FALSE){
 #' 
 log_prior <- function(theta){
   return(0)
+}
+
+#' Compute the density for a GEV distribution
+#' 
+#' @param y a vector containing the data.
+#' @param mu a real value containing the location parameter
+#' @param sigma a positive value containing the scale parameter
+#' @param k a real value different from zero containing the shape
+#' parameter
+#' 
+#' @author Asael Alonzo Matamoros
+#' 
+#' @return a real value with the image of the logarithm of the likelihood
+#' 
+gev_pdf <-function(y,mu,sigma,k){
+  n = length(y)
+  z = (y - mu)/sigma
+  d = rep(0,n)
+  
+  if(k == 0){
+    d = exp(-z)*exp(-exp(-z))
+  }else{
+    inv_k = 1/k
+    z1 = (1 + k*z)
+    cond = k*z > -1
+    
+    d[cond] = (z1[cond])^(-1-inv_k)*exp(-z1[cond]^(-inv_k))
+    d[!cond] = 0
+  }
+  return(d)
+}
+
+#' Simulate values from a GEV distribution
+#' 
+#' @param y a vector containing the data.
+#' @param mu a real value containing the location parameter
+#' @param sigma a positive value containing the scale parameter
+#' @param k a real value different from zero containing the shape
+#' parameter
+#' 
+#' @author Asael Alonzo Matamoros
+#' 
+#' @return a vector containing a sample that follows a GEV distribution
+#' 
+gev_rng <- function(n,mu = 0,sigma = 1,k = 1){
+
+  u = runif(n)
+  if(k == 0){
+    x = mu - sigma*log(-log(u))
+  }else{
+    x = mu + (sigma/k)*( (-log(u))^k -1)
+  }
+  return(x)
+}
+
+#' Compute the log density for a GEV distribution
+#' 
+#' @param y a vector containing the data.
+#' @param mu a real value containing the location parameter
+#' @param sigma a positive value containing the scale parameter
+#' @param k a real value different from zero containing the shape
+#' parameter
+#' 
+#' @author Asael Alonzo Matamoros
+#' 
+#' @return a real value with the image of the logarithm of the likelihood
+#'
+gev_lpdf <- function(y,mu,sigma,k){
+  n = length(y)
+  z = (y - mu)/sigma
+  d = rep(0,n)
+  
+  if(k == 0){
+    d = -z - exp(-z)
+  }else{
+    inv_k = 1/k
+    z1 = k*z
+    cond = z1 > -1
+    
+    d[cond] = (-1-inv_k)*log1p(z1[cond]) - (1+z1[cond])^(-inv_k)
+    d[!cond] = -1e-64
+  }
+  return(d)
+}
+
+#' Generate a proposed value from a Jump distribution
+#' 
+#' @param prop a vector with the proposed parameters from previous
+#' iteration.
+#' @param scale a covariance matrix used in the Gaussian Jump distribution
+#' 
+#' @author Asael Alonzo Matamoros
+#' 
+#' @return a vector following a Gaussian distribution of dimension d,
+#' with mean = prop, and covariance matrix C = scale.
+#' 
+rjump <- function(prop,scale){
+  
+  d = length(prop)
+  cov = chol(scale)
+
+  x = as.numeric(cov %*%rnorm(n = d))
+  
+  return(x + prop)
+}
+
+#' Evaluate the density of a Gaussian distribution used as Jump density
+#' 
+#' @param proposed a vector to evaluate the multivariate density.
+#' @param prop a vector with the proposed parameters from previous
+#' iteration.
+#' @param scale a covariance matrix used in the Gaussian Jump distribution
+#' 
+#' @author Asael Alonzo Matamoros
+#' 
+#' @return a vector following a Gaussian distribution of dimension d,
+#' with mean = prop, and covariance matrix C = scale.
+#' 
+djump <- function(proposed,prop,scale){
+  d2 = mvtnorm::dmvnorm(proposed,mean = prop,
+                        sigma = scale,log = TRUE)
+  
+  return(sum(d2))
 }

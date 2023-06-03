@@ -1,5 +1,5 @@
 ---
-title: "Prueba_Metropolis"
+title: "Prueba_Metropolis-GEV"
 author: "Asael"
 output: md_document
 ---
@@ -9,7 +9,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ```{r,message=FALSE}
-source("functions.R")
+source("Funciones/functions.R")
 
 library(posterior)
 library(bayesplot)
@@ -18,11 +18,11 @@ library(loo)
 ```
 
 
-Este cuaderno hace un prueba de la funcionalidad del algortimo de Metropolis implementado en el archivo `functions.R`, en este experimento se simularan datos de una normal univariada mediante las siguientes ecuaciones
+Este cuaderno hace un prueba de la funcionalidad del algoritmo de Metropolis implementado en el archivo `functions.R`, en este experimento se simularan datos de una normal univariada mediante las siguientes ecuaciones
 
 $$
-y = \mu + \sigma \varepsilon, \quad \varepsilon \sim N(0,1),\\
-\mu \sim N(0,1), \quad \sigma \sim logN(1,1).
+y  \sim GEV(\mu,\sigma,\alpha),\\
+\mu \sim N(0,1), \quad \sigma \sim logN(1,1) \ alpha \sim beta(2,2).
 $$
 
 Los datos se simulan mediante el siguiente codigo:
@@ -30,88 +30,86 @@ Los datos se simulan mediante el siguiente codigo:
 ```{r}
 #priors
 mu = rnorm(1)
-sigma = rlnorm(1,meanlog = 1)
+sigma = rgamma(1,5,2.5)
+alpha = rnorm(1)
 # datos
-y = rnorm(n = 100,mean = mu,sd = sigma)
+y = gev_rng(n = 250,mu = mu1,sigma = sigma,k = alpha)
 
-ggplot(data.frame(y),aes(x = y))+geom_histogram(bins = 20)+
+ggplot(data.frame(y),aes(x = y))+geom_histogram(bins = 30)+
   labs(x = "y",y = "conteo",title = "Histograma de los datos simulados y")
 ```
 
-Ahora bien, previo a la estimacion de los parametros, actualizamos las funciones `loglik()`, `log_prior()` y `inits()` para que calculen la verosimilitud, el logaritmo de la prior y valores iniciales, de forma correcta. Estas funciones son necesarias para el salto de metropolis (`metropolis_step`) y para la iniciacion correcta del algoritmo (`metropolis_sampler()`). 
+Ahora bien, previo a la estimacion de los parametros, actualizamos las funciones `loglik()`, `log_prior()` y `inits()` para que calculen la verosimilitud, el logaritmo de la prior y valores iniciales, de forma correcta. Estas funciones son necesarias para el salto de Metropolis (`metropolis_step`) y para la iniciacion correcta del algoritmo (`metropolis_sampler()`). 
 
 
 ```{r}
 # Estimacion de la log-verosimilitud
-loglik <- function(y,theta,sum = TRUE){
-  if(sum){
-    d = sum(dnorm(x = y,mean = theta[1],sd = theta[2],log = TRUE))
-    d = ifelse(is.na(d),-10^(64),d)
-  }else{
-    d = dnorm(x = y,mean = theta[1],sd = theta[2],log = TRUE)
-  }
-   return(d)
+loglik <- function(y,theta){
+    d = gev_lpdf(y,mu = mu1,sigma = sigma,k = theta[1])
+    return(sum(d))
 }
 
 # Calculo de la log prior logP(theta)
 log_prior <- function(theta){
-  d1 = dnorm(theta[1],log = TRUE)
-  d2 = dlnorm(theta[2],meanlog = 1,log = TRUE)
-  return(d1 + d2)
+  d1 = dnorm(theta[1],mean = 0,sd = 1,log = TRUE)
+  d2 = dgamma(theta[2],shape = 5,rate = 2.5,log = TRUE)
+  d3 = dnorm(theta[3],mean = 0,sd = 1,log = TRUE)
+  return(d1+d2+d3)
 }
 
 # Generacion de los valores iniciales
-inits <- function(y,d = 2){
-  c(rnorm(1),rlnorm(1,meanlog = 1))
+inits <- function(y,d = 1){
+  c(rnorm(1),rgamma(1,5,2.5),rnorm(1))
 }
 ```
 
 
-Ahora bien, procedemos a generar nuestras cadenas de Markov usando el algoritmo de Metropolis. En este caso la funcion de salto es una normal multivariada simetrica $proposed \sim N_2(prop,diag(1,1))$, con matriz de covarianza siendo la matriz identidad. Se generaron 4 cadenas de Markov de un total de 10,000 iteraciones por cadena (`iter = 10,000`), donde se eliminaron las primeras 2,000 iteraciones (`burn-in = 2000`), y se aceptaron los saltos de cada 5 tiempos (`lag = 5`) para evitar que las cadenas se quedaran estancadas.
+Ahora bien, procedemos a generar nuestras cadenas de Markov usando el algoritmo de Metropolis. En este caso la función de salto es una normal multivariada simétrica $proposed \sim N_2(prop,diag(1,1))$, con matriz de covarianza siendo la matriz identidad. Se generaron 4 cadenas de Markov de un total de 10,000 iteraciones por cadena (`iter = 10,000`), donde se eliminaron las primeras 2,000 iteraciones (`burn-in = 2000`), y se aceptaron los saltos de cada 5 tiempos (`lag = 5`) para evitar que las cadenas se quedaran estancadas.
 
 ```{r,warning=FALSE}
-Scale_mat  = diag(c(1,1))
+Scale_mat =  diag(c(1,1,1))
 
-post1 = metropolis_sampler(y = y,scale = Scale_mat,d = 1,chains = 4,
-                           iter = 10000,lag = 5,burnin = 2000)
+post1 = metropolis_sampler(y = y,scale = Scale_mat,chains = 4,
+                           iter = 7000,lag = 5,burnin = 5000)
 ```
 
-
-Los resultados obtenidos muestran convergencia en las cadenas $\hat R \approx 1$, y los tamaños de muestra efectivos son lo suficientemente grandes, como para aceptar las simulaciones obtenidas. Notemos que las posterior recuperaron los valores reales de $\mu$ (`r mu`) y $\sigma$ (`r sigma`).
+Los resultados obtenidos muestran convergencia en las cadenas $\hat R \approx 1$, y los tamaños de muestra efectivos son lo suficientemente grandes, como para aceptar las simulaciones obtenidas. Notemos que las posterior recuperaron los valores reales de $\mu$ (`r mu`), $\sigma$ (`r sigma`) y $\alpha$ (`r alpha`).
 
 ```{r}
-colnames(post1) = c("mu","sigma",".chain")
+colnames(post1) = c("mu","sigma","k","reject",".chain")
 post_df = as_draws_df(post1)
 
 summarise_draws(post_df)
 ```
 
 
-Ademas, las cadenas e densidades de las posterioris muestran que las cadenas se mezclaron y no se observa multi-modalidad, por lo tanto aceptamos las simulaciones obtenidas del algoritmo
+Ademas, las cadenas y densidades de las posterioris muestran que las cadenas se mezclaron y no se observa multi-modalidad, por lo tanto aceptamos las simulaciones obtenidas del algoritmo
 
 ```{r}
-mcmc_combo(post_df,pars = c("mu","sigma"))
+mcmc_combo(post_df,pars = c("mu","sigma","k"))
 ```
 
-Revisar el ajuste de los datos es una buena praxis para validar los supuestos del modelo, para eso es necesario realizar posterior predictive checks. En este caso, extraemos 500 simulaciones aleatorias, y las comparamos con los datos reales. El grafico siguiente muestra que el modelo provee un buen ajuste de los datos.
+Revisar el ajuste de los datos es una buena praxis para validar los supuestos del modelo, para eso es necesario realizar posterior predictive checks. En este caso, extraemos 500 simulaciones aleatorias, y las comparamos con los datos reales. El gráfico siguiente muestra que el modelo provee un buen ajuste de los datos.
 
 ```{r,warning=FALSE}
 y_rep = apply(post1,1,FUN = function(x){
   x = as.numeric(x)
-  rnorm(n = 100,mean = x[1],sd = x[2])
+  gev_rng(n = length(y),mu = x[1],sigma = x[2],k = x[3])
 })
 
-s = sample(1:40000,size = 500)
-ppc_dens_overlay(y = y,yrep = t(y_rep)[s,])
+s = sample(1:28000,size = 500)
+ppc_dens_overlay(y = y,yrep = t(y_rep[,s]))
 ```
 
 Finalmente, realizamos validacion cruzada para determinar el ajuste del modelo, para eso es necesario computar la matriz de de log-verosimilitud, al aproximar la elpd (Expected log-predictive density) notamos que no hay advertencias de un mal ajusto de los valores de pareto, por lo tanto aceptamos el modelo propuesto.
 
 ```{r,warning=FALSE}
-LL = log_lik(y,post1,sum = FALSE)
+LL = log_lik(y,post1)
 
 loo1 = loo(LL, relative_eff(exp(LL)))
 loo1
 ```
 
 
+
+$$exp(k * -log(-log(beta)) = exp(log(  ))
