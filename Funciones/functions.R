@@ -18,8 +18,10 @@
 #' @param samples an integer with the amount of samples for approximating the
 #' latent distribution of mu_t | y_t.
 #' 
+#' @author Elvis Arrazola y Cristian Cruz
+#' 
 #' @return an array mu of dimension n X samples x p
-
+#' 
 FFBS <- function(m0 = 0, C0 = 0.6, FF = 1, G = 1, V = 1, 
                  W = 1, n, m = 1, p = 1, data, samples){
   
@@ -80,3 +82,154 @@ FFBS <- function(m0 = 0, C0 = 0.6, FF = 1, G = 1, V = 1,
   return(mu)
 } 
 
+#' Metropolis Sampler algorithm
+#' 
+#' Generates different MARKOV Chains with the simulated marginal posteriors
+#' 
+#' @param y a matrx with the used data for estimating the posterior
+#' @param chains integer with the total amount of chains 
+#' @param iter an integer with the total iterations per chain after warm up
+#' @param scale scale matrix for the proposed Jump distribution
+#' @param burnin an integer for the first iterations to be burned in warm-up
+#' iterations.
+#' @param lag the amount of lags to be burnned for avoid stucked jumps
+#' @param d integer obtaining the parameter's dimension.
+#' 
+#' @author Asael Alonzo Matamoros
+#' 
+#' @return an data frame with the simulated posteriors
+#' 
+metropolis_sampler <- function(y,chains = 4, iter = 5000, scale = 0.5,
+                               burnin = 5000, lag = 5,d = 1) {
+  
+  post = NULL
+  for(k in 1:chains){
+    results = NULL
+    current_state = inits(y,d)
+    # burn-in
+    for(i in 1:burnin) {
+      out = metropolis_step(y,current_state, scale)
+      current_state = out
+    }
+    # sample
+    for(i in 1:iter) {
+      for(j in 1:lag) {
+        out = metropolis_step(y,current_state, scale)
+        current_state = out
+      }
+      results = rbind(results,out)
+    }
+   post = rbind(post,results) 
+  }
+  row.names(post) = NULL
+  post = as.data.frame(post)
+  post$.chain = sort(rep(1:chains,iter))
+  
+  return(post)
+}
+
+#' Metropolis Step
+#' 
+#' Generates a Jump for the Metropolis Algorithm 
+#' 
+#' @param y a matrx with the used data for estimating the posterior.
+#' @param prop a vector with the previous step
+#' @param scale scale matrix for the proposed Jump distribution
+#' 
+#' This function use a symmetric multivariate normal distribution
+#' to generates the Jumps, in case of an asymmetric jump, use the
+#' the Metropolis-Hastings jump.
+#' 
+#' @author Asael Alonzo Matamoros
+#' 
+#' @return a vector with the proposed jump
+#' 
+metropolis_step <- function(y,prop, scale) {
+  
+  proposed = MASS::mvrnorm(n = 1, mu = prop,Sigma = scale)
+  
+  u  =  runif(1)
+  accept_prob = min(1, target(y,proposed) / (target(y,prop)))
+  
+  if(u <= accept_prob){
+    value = proposed
+  }else{
+    value = prop
+  }
+  return(value)
+}
+#' Initial values simulation
+#' 
+#' Generates valid initial values for a parameter of dimension d
+#' 
+#' @param y a matrx with the used data for estimating the posterior.
+#' @param d an integer with the parameter;s dimension
+#' 
+#' This function generates initial values using a multivariate normal
+#' distribution and validates them using the `target()` function.
+#' 
+#' @author Asael Alonzo Matamoros
+#' 
+#' @return a vector with the simulated initial valutes for the 
+#' Metropolis steps
+#' 
+inits <- function(y,d = 1){
+  
+  x = MASS::mvrnorm(n = 1, mu = rep(0,d),Sigma = diag(rep(1,d)))
+  t = target(y,x)
+  while( is.na(t) || t <= 0){
+    x = MASS::mvrnorm(n = 1, mu = rep(0,d),Sigma = diag(rep(1,d)))
+  }
+  return(x)
+}
+
+#' Evaluates the target function in a metropolis step
+#' 
+#'  target(y,theta) = log_lik(y,theta) + log_prior(theta)
+#'  
+#' 
+#' @param y a matrx with the used data for estimating the posterior.
+#' @param theta a vector of the unknown parameters to be evaluated in 
+#' the prior density.
+#' 
+#' @author Asael Alonzo Matamoros
+#' 
+#' @return a real value with the image of the target distribution
+#' 
+target <- function(y,theta){
+  
+  t = loglik(y,theta) + log_prior(theta)
+  return(exp(t))
+}
+
+#' Computes the Log_likelihood matrix 
+#' 
+#' @param y a matrx with the used data for estimating the posterior.
+#' @param post a matrix with the posterior parameters, with ncols = d,
+#' and nrows = iter.
+#' 
+#' @author Asael Alonzo Matamoros
+#' 
+#' @return a matrix of dimension ncols n = length(y) and nrows = iter,
+#' with the evaluated log_likelihood.
+#' 
+log_lik <- function(y,post){
+  
+  LL = apply(post, 1, function(z){
+    z = as.numeric(z)
+    loglik(y,z)
+  })
+  t(LL)
+}
+#' Defaults log_prior density
+#' 
+#' @param theta a matrix with the posterior parameters, with ncols = d,
+#' and nrows = iter.
+#' 
+#' @author Asael Alonzo Matamoros
+#' 
+#' @return a real value with the image of the log_prior density
+#' 
+log_prior <- function(theta){
+  return(0)
+}
