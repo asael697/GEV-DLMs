@@ -90,31 +90,39 @@ FFBS <- function(m0 = 0, C0 = 0.6, FF = 1, G = 1, V = 1,
 #' @param chains integer with the total amount of chains 
 #' @param iter an integer with the total iterations per chain after warm up
 #' @param scale scale matrix for the proposed Jump distribution
-#' @param burnin an integer for the first iterations to be burned in warm-up
+#' @param warm_up an integer for the first iterations to be burned in warm-up
 #' iterations.
-#' @param lag the amount of lags to be burnned for avoid stucked jumps
+#' @param thin the amount of lags to be burned for avoid stuck jumps
+#' @param Hastings performs a Metropolis-Hastings step with an asymmetric Jump
+#' function.
+#' @param dif_adjust performs a differential adjustment to perform a Jump
+#' candidate in the Metropolis step.
 #' 
 #' @author Asael Alonzo Matamoros
 #' 
-#' @return an data frame with the simulated posteriors
+#' @return an data frame with the simulated posteriors, a vector `.chain`
+#' containing the chain which the sample belongs, and a vector `reject`
+#' which stats if the current jump was rejected.
+#' 
 #' 
 metropolis_sampler <- function(y,chains = 4, iter = 5000, scale = 0.5,
-                               burnin = 5000, lag = 5) {
+                               warm_up = round(iter/2,0), thin = 5,Hastings = TRUE,
+                               dif_adjust = FALSE) {
   
   post = NULL
   for(k in 1:chains){
     results = NULL
     current_state = inits()
     # burn-in
-    for(i in 1:burnin) {
-      out = metropolis_step(y,current_state,scale)
+    for(i in 1:warm_up) {
+      out = step(y,current_state,scale,Hastings,dif_adjust)
       current_state = out$value
     }
     # sample
     for(i in 1:iter) {
       cont = 0
-      for(j in 1:lag) {
-        out = metropolis_step(y,current_state,scale)
+      for(j in 1:thin) {
+        out = step(y,current_state,scale,Hastings,dif_adjust)
         current_state = out$value
         cont = cont + out$reject
       }
@@ -129,13 +137,17 @@ metropolis_sampler <- function(y,chains = 4, iter = 5000, scale = 0.5,
   return(post)
 }
 
-#' Metropolis Step
+#' Metropolis-Hastings Steps
 #' 
 #' Generates a Jump for the Metropolis Algorithm 
 #' 
 #' @param y a matrx with the used data for estimating the posterior.
 #' @param prop a vector with the previous step
 #' @param scale scale matrix for the proposed Jump distribution
+#' @param Hastings performs a Metropolis-Hastings step with an asymmetric Jump
+#' function.
+#' @param dif_adjust performs a differential adjustment to perform a Jump
+#' candidate in the Metropolis step.
 #' 
 #' This function use a symmetric multivariate normal distribution
 #' to generates the Jumps, in case of an asymmetric jump, use the
@@ -145,13 +157,14 @@ metropolis_sampler <- function(y,chains = 4, iter = 5000, scale = 0.5,
 #' 
 #' @return a vector with the proposed jump
 #' 
-metropolis_step <- function(y,prop, scale) {
+step <- function(y,prop,scale,Hastings = TRUE,dif_adjust = FALSE) {
   reject = 1
-  proposed = rjump(prop = prop,scale = scale)
+  ls = diff_adjustment(prop, scale, dif_adjust)
+  proposed = rjump(prop = ls$prop, scale = ls$scale)
 
   u  =  runif(1)
-  t1 = target(y,proposed) + djump(proposed,prop,scale) 
-  t2 = target(y,prop) + djump(prop,proposed, scale) 
+  t1 = target(y, proposed) + Hastings*djump(prop, ls$prop, ls$scale) 
+  t2 = target(y, prop) + Hastings*djump(proposed, ls$prop, ls$scale) 
   et = exp(t1 - t2)
   et = ifelse(is.na(et),0,et)
   accept_prob = min(1,et)
@@ -167,6 +180,73 @@ metropolis_step <- function(y,prop, scale) {
   return(out)
 }
 
+#' Generate a proposed value from a Jump distribution
+#' 
+#' @param prop a vector with the proposed parameters from previous
+#' iteration.
+#' @param scale a covariance matrix used in the Gaussian Jump distribution
+#' 
+#' @author Asael Alonzo Matamoros
+#' 
+#' @return a vector following a Gaussian distribution of dimension d,
+#' with mean = prop, and covariance matrix C = scale.
+#' 
+rjump <- function(prop,scale){
+  
+  d = length(prop)
+  cov = chol(scale)
+  
+  x = as.numeric(cov %*%rnorm(n = d))
+  
+  return(x + prop)
+}
+
+#' Evaluate the density of a Gaussian distribution used as Jump density
+#' 
+#' @param proposed a vector to evaluate the multivariate density.
+#' @param prop a vector with the proposed parameters from previous
+#' iteration.
+#' @param scale a covariance matrix used in the Gaussian Jump distribution
+#' 
+#' @author Asael Alonzo Matamoros
+#' 
+#' @return a vector following a Gaussian distribution of dimension d,
+#' with mean = prop, and covariance matrix C = scale.
+#' 
+djump <- function(proposed,prop,scale){
+  d2 = mvtnorm::dmvnorm(proposed,mean = prop,
+                        sigma = scale,log = TRUE)
+  
+  return(sum(d2))
+}
+#' Estimate the mean and covariance using a differential adjustment
+#' 
+#' The values are obtained by applying:
+#'   
+#'   opt = arg_max(target)
+#'   mu  = opt + Sigma* GRAD(target(opt))
+#'   Sigma^{-1} = -Hessian(target(opt))
+#' 
+#' @param prop a vector with the proposed parameters from previous
+#' iteration.
+#' @param scale a covariance matrix used in the Gaussian Jump distribution
+#' @param dif_adjust performs a differential adjustment to perform a Jump
+#' candidate in the Metropolis step.
+#' 
+#' @return if `dif_adjut` is `TRUE` returns a list with the adjusted mean 
+#' and covariance, if `FALSE` returns a list with the original values.
+#' 
+diff_adjustment <- function(prop,scale,dif_adjust = FALSE){
+  d = length(prop)
+  
+  if(dif_adjust){
+    t_prop = function(par) target(y,par)
+    opt = optim(c(0,1,0),fn =  function(par) -target(y,par))$par
+    prop = scale %*% numDeriv::grad(t_prop,x = opt)
+    prop = opt + as.numeric(prop)  
+  }
+  return(list(prop = prop,scale = scale))
+}
 #' Evaluates the target function in a metropolis step
 #' 
 #'  target(y,theta) = log_lik(y,theta) + log_prior(theta)
@@ -236,13 +316,13 @@ gev_pdf <-function(y,mu,sigma,k){
   d = rep(0,n)
   
   if(k == 0){
-    d = exp(-z)*exp(-exp(-z))
+    d = exp(-z*(k+1))*exp(-exp(-z))/sigma
   }else{
     inv_k = 1/k
     z1 = (1 + k*z)
     cond = k*z > -1
     
-    d[cond] = (z1[cond])^(-1-inv_k)*exp(-z1[cond]^(-inv_k))
+    d[cond] = (z1[cond])^(-1-inv_k)*exp(-z1[cond]^(-inv_k))/sigma
     d[!cond] = 0
   }
   return(d)
@@ -289,54 +369,14 @@ gev_lpdf <- function(y,mu,sigma,k){
   d = rep(0,n)
   
   if(k == 0){
-    d = -z - exp(-z)
+    d = -z - (k+1)*exp(-z) - log(sigma)
   }else{
     inv_k = 1/k
     z1 = k*z
     cond = z1 > -1
     
-    d[cond] = (-1-inv_k)*log1p(z1[cond]) - (1+z1[cond])^(-inv_k)
+    d[cond] = (-1-inv_k)*log1p(z1[cond]) - (1+z1[cond])^(-inv_k) - log(sigma)
     d[!cond] = -1e-64
   }
   return(d)
-}
-
-#' Generate a proposed value from a Jump distribution
-#' 
-#' @param prop a vector with the proposed parameters from previous
-#' iteration.
-#' @param scale a covariance matrix used in the Gaussian Jump distribution
-#' 
-#' @author Asael Alonzo Matamoros
-#' 
-#' @return a vector following a Gaussian distribution of dimension d,
-#' with mean = prop, and covariance matrix C = scale.
-#' 
-rjump <- function(prop,scale){
-  
-  d = length(prop)
-  cov = chol(scale)
-
-  x = as.numeric(cov %*%rnorm(n = d))
-  
-  return(x + prop)
-}
-
-#' Evaluate the density of a Gaussian distribution used as Jump density
-#' 
-#' @param proposed a vector to evaluate the multivariate density.
-#' @param prop a vector with the proposed parameters from previous
-#' iteration.
-#' @param scale a covariance matrix used in the Gaussian Jump distribution
-#' 
-#' @author Asael Alonzo Matamoros
-#' 
-#' @return a vector following a Gaussian distribution of dimension d,
-#' with mean = prop, and covariance matrix C = scale.
-#' 
-djump <- function(proposed,prop,scale){
-  d2 = mvtnorm::dmvnorm(proposed,mean = prop,
-                        sigma = scale,log = TRUE)
-  
-  return(sum(d2))
 }
