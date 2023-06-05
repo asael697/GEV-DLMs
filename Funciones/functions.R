@@ -105,9 +105,27 @@ FFBS <- function(m0 = 0, C0 = 0.6, FF = 1, G = 1, V = 1,
 #' which stats if the current jump was rejected.
 #' 
 #' 
-metropolis_sampler <- function(y,chains = 4, iter = 5000, scale = 0.5,
-                               warm_up = round(iter/2,0), thin = 5,Hastings = TRUE,
-                               dif_adjust = FALSE) {
+sampling <- function(y,chains = 4, iter = 5000, scale = 0.5, thin = 5,
+                               warm_up = round(iter/2,0), Hastings = TRUE,
+                               dif_adjust = FALSE,mala = FALSE) {
+  
+  if(dif_adjust) {
+    mala = FALSE
+    Hastings = TRUE
+  }
+  
+  if(mala) {
+    dif_adjust = FALSE
+    Hastings = TRUE
+    ds = diag(scale)
+    tau = mean(ds)
+    scale1 = abs(tau)*diag(length(ds))
+  }
+  
+  d1 = length(inits())
+  if(length(diag(scale)) != d1)
+    stop("The dimension of the scale matrix and parameters don't match")
+  
   
   post = NULL
   for(k in 1:chains){
@@ -115,16 +133,14 @@ metropolis_sampler <- function(y,chains = 4, iter = 5000, scale = 0.5,
     current_state = inits()
     # burn-in
     for(i in 1:warm_up) {
-      out = step(y,current_state,scale,Hastings,dif_adjust)
+      out = step(y,current_state,scale,Hastings,dif_adjust,mala)
       current_state = out$value
     }
     # sample
     for(i in 1:iter) {
-      cont = 0
       for(j in 1:thin) {
-        out = step(y,current_state,scale,Hastings,dif_adjust)
+        out = step(y,current_state,scale,Hastings,dif_adjust,mala)
         current_state = out$value
-        cont = cont + out$reject
       }
       results = rbind(results,c(out$value, out$reject))
     }
@@ -157,9 +173,10 @@ metropolis_sampler <- function(y,chains = 4, iter = 5000, scale = 0.5,
 #' 
 #' @return a vector with the proposed jump
 #' 
-step <- function(y,prop,scale,Hastings = TRUE,dif_adjust = FALSE) {
+step <- function(y,prop,scale,Hastings = TRUE,
+                 dif_adjust = FALSE,mala = FALSE) {
   reject = 1
-  ls = diff_adjustment(prop, scale, dif_adjust)
+  ls = diff_adjustment(prop, scale, dif_adjust,mala)
   proposed = rjump(prop = ls$prop, scale = ls$scale)
 
   u  =  runif(1)
@@ -192,12 +209,8 @@ step <- function(y,prop,scale,Hastings = TRUE,dif_adjust = FALSE) {
 #' with mean = prop, and covariance matrix C = scale.
 #' 
 rjump <- function(prop,scale){
-  
   d = length(prop)
-  cov = chol(scale)
-  
-  x = as.numeric(cov %*%rnorm(n = d))
-  
+  x = as.numeric(scale%*%rnorm(n = d))
   return(x + prop)
 }
 
@@ -214,8 +227,10 @@ rjump <- function(prop,scale){
 #' with mean = prop, and covariance matrix C = scale.
 #' 
 djump <- function(proposed,prop,scale){
-  d2 = mvtnorm::dmvnorm(proposed,mean = prop,
-                        sigma = scale,log = TRUE)
+  d = length(proposed)
+  
+  z = solve(scale)%*%(proposed - prop)
+  d2 = dnorm(z,log = TRUE)
   
   return(sum(d2))
 }
@@ -236,16 +251,24 @@ djump <- function(proposed,prop,scale){
 #' @return if `dif_adjut` is `TRUE` returns a list with the adjusted mean 
 #' and covariance, if `FALSE` returns a list with the original values.
 #' 
-diff_adjustment <- function(prop,scale,dif_adjust = FALSE){
-  d = length(prop)
+diff_adjustment <- function(prop,scale,dif_adjust = FALSE, mala = FALSE){
+  t_prop = function(par) target(y,par)
   
   if(dif_adjust){
-    t_prop = function(par) target(y,par)
-    opt = optim(c(0,1,0),fn =  function(par) -target(y,par))$par
+    opt = optim(prop,fn =  function(par) -target(y,par))$par
+    
+    scale = chol2inv(
+      -numDeriv::hessian(t_prop,x = opt)
+    )
+    
     prop = scale %*% numDeriv::grad(t_prop,x = opt)
     prop = opt + as.numeric(prop)  
   }
-  return(list(prop = prop,scale = scale))
+  if(mala){
+    prop = prop + as.numeric(scale %*% numDeriv::grad(t_prop,x = prop))
+    scale = 2*scale
+  }
+  return(list(prop = prop,scale = chol(scale) ))
 }
 #' Evaluates the target function in a metropolis step
 #' 
@@ -296,87 +319,4 @@ log_lik <- function(y,post){
 #' 
 log_prior <- function(theta){
   return(0)
-}
-
-#' Compute the density for a GEV distribution
-#' 
-#' @param y a vector containing the data.
-#' @param mu a real value containing the location parameter
-#' @param sigma a positive value containing the scale parameter
-#' @param k a real value different from zero containing the shape
-#' parameter
-#' 
-#' @author Asael Alonzo Matamoros
-#' 
-#' @return a real value with the image of the logarithm of the likelihood
-#' 
-gev_pdf <-function(y,mu,sigma,k){
-  n = length(y)
-  z = (y - mu)/sigma
-  d = rep(0,n)
-  
-  if(k == 0){
-    d = exp(-z*(k+1))*exp(-exp(-z))/sigma
-  }else{
-    inv_k = 1/k
-    z1 = (1 + k*z)
-    cond = k*z > -1
-    
-    d[cond] = (z1[cond])^(-1-inv_k)*exp(-z1[cond]^(-inv_k))/sigma
-    d[!cond] = 0
-  }
-  return(d)
-}
-
-#' Simulate values from a GEV distribution
-#' 
-#' @param y a vector containing the data.
-#' @param mu a real value containing the location parameter
-#' @param sigma a positive value containing the scale parameter
-#' @param k a real value different from zero containing the shape
-#' parameter
-#' 
-#' @author Asael Alonzo Matamoros
-#' 
-#' @return a vector containing a sample that follows a GEV distribution
-#' 
-gev_rng <- function(n,mu = 0,sigma = 1,k = 1){
-
-  u = runif(n)
-  if(k == 0){
-    x = mu - sigma*log(-log(u))
-  }else{
-    x = mu + (sigma/k)*( (-log(u))^k -1)
-  }
-  return(x)
-}
-
-#' Compute the log density for a GEV distribution
-#' 
-#' @param y a vector containing the data.
-#' @param mu a real value containing the location parameter
-#' @param sigma a positive value containing the scale parameter
-#' @param k a real value different from zero containing the shape
-#' parameter
-#' 
-#' @author Asael Alonzo Matamoros
-#' 
-#' @return a real value with the image of the logarithm of the likelihood
-#'
-gev_lpdf <- function(y,mu,sigma,k){
-  n = length(y)
-  z = (y - mu)/sigma
-  d = rep(0,n)
-  
-  if(k == 0){
-    d = -z - (k+1)*exp(-z) - log(sigma)
-  }else{
-    inv_k = 1/k
-    z1 = k*z
-    cond = z1 > -1
-    
-    d[cond] = (-1-inv_k)*log1p(z1[cond]) - (1+z1[cond])^(-inv_k) - log(sigma)
-    d[!cond] = -1e-64
-  }
-  return(d)
 }
