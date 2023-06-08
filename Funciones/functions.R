@@ -84,19 +84,22 @@ FFBS <- function(m0 = 0, C0 = 0.6, FF = 1, G = 1, V = 1,
 
 #' Metropolis Sampler algorithm
 #' 
-#' Generates different MARKOV Chains with the simulated marginal posteriors
+#' Generates different Markov Chains with the simulated marginal posteriors
 #' 
-#' @param y a matrx with the used data for estimating the posterior
+#' @param y matrix with the used data for estimating the posterior
 #' @param chains integer with the total amount of chains 
-#' @param iter an integer with the total iterations per chain after warm up
+#' @param iter integer with the total iterations per chain after warm up
 #' @param scale scale matrix for the proposed Jump distribution
-#' @param warm_up an integer for the first iterations to be burned in warm-up
+#' @param warm_up integer for the first iterations to be burned in warm-up
 #' iterations.
-#' @param thin the amount of lags to be burned for avoid stuck jumps
+#' @param thin integer with the amount of lags to be burned for avoid stucked
+#' jumps.
 #' @param Hastings performs a Metropolis-Hastings step with an asymmetric Jump
 #' function.
-#' @param dif_adjust performs a differential adjustment to perform a Jump
-#' candidate in the Metropolis step.
+#' @param diff_adjust Boolean that indicates a differential adjustment For a
+#' Jump candidate in the Metropolis step.
+#' @param mala Boolean that indicates a MALA step for the Jump candidate in
+#' the Metropolis step.
 #' 
 #' @author Asael Alonzo Matamoros
 #' 
@@ -106,43 +109,33 @@ FFBS <- function(m0 = 0, C0 = 0.6, FF = 1, G = 1, V = 1,
 #' 
 #' 
 sampling <- function(y,chains = 4, iter = 5000, scale = 0.5, thin = 5,
-                               warm_up = round(iter/2,0), Hastings = TRUE,
-                               dif_adjust = FALSE,mala = FALSE) {
+                     warm_up = round(iter/2,0), Hastings = TRUE,
+                     diff_adjust = FALSE) {
   
-  if(dif_adjust) {
-    mala = FALSE
-    Hastings = TRUE
-  }
+  init = inits()
+  d = length(init)
+  mu = rep(0,d)
   
-  if(mala) {
-    dif_adjust = FALSE
-    Hastings = TRUE
-    ds = diag(scale)
-    tau = mean(ds)
-    scale1 = abs(tau)*diag(length(ds))
-  }
-  
-  d1 = length(inits())
-  if(length(diag(scale)) != d1)
+  if(length(diag(scale)) != d)
     stop("The dimension of the scale matrix and parameters don't match")
   
-  
   post = NULL
+  
   for(k in 1:chains){
     results = NULL
-    current_state = inits()
+    current_state = inits() 
     # burn-in
     for(i in 1:warm_up) {
-      out = step(y,current_state,scale,Hastings,dif_adjust,mala)
+      out = step(y,current_state+mu,scale,Hastings)
       current_state = out$value
     }
     # sample
     for(i in 1:iter) {
       for(j in 1:thin) {
-        out = step(y,current_state,scale,Hastings,dif_adjust,mala)
+        out = step(y,current_state+mu,scale,Hastings)
         current_state = out$value
       }
-      results = rbind(results,c(out$value, out$reject))
+      results = rbind(results, c(out$value,out$accepted))
     }
    post = rbind(post,results) 
   }
@@ -153,53 +146,54 @@ sampling <- function(y,chains = 4, iter = 5000, scale = 0.5, thin = 5,
   return(post)
 }
 
-#' Metropolis-Hastings Steps
+#' MCMC Steps
 #' 
-#' Generates a Jump for the Metropolis Algorithm 
+#' Generates a Jump for a MCMC algorithm 
 #' 
-#' @param y a matrx with the used data for estimating the posterior.
-#' @param prop a vector with the previous step
-#' @param scale scale matrix for the proposed Jump distribution
-#' @param Hastings performs a Metropolis-Hastings step with an asymmetric Jump
-#' function.
-#' @param dif_adjust performs a differential adjustment to perform a Jump
-#' candidate in the Metropolis step.
+#' @param y matrix with the used data for estimating the posterior.
+#' @param prop vector with the previous step.
+#' @param scale scale matrix for the proposed Jump distribution.
+#' @param Hastings Boolean which performs a Metropolis-Hastings step with an
+#' asymmetric Jump function.
+#' @param diff_adjust Boolean that indicates a differential adjustment For a
+#' Jump candidate in the Metropolis step.
+#' @param mala Boolean that indicates a MALA step for the Jump candidate in
+#' the Metropolis step.
 #' 
-#' This function use a symmetric multivariate normal distribution
-#' to generates the Jumps, in case of an asymmetric jump, use the
-#' the Metropolis-Hastings jump.
+#' This function generates a  MCMC step using one of the three algorithms:
+#'  - Metropolis Hastings
+#'  - Differential Adjusted Metropolis
+#'  - Metropolis-adjusted Langevin Algorithm
 #' 
 #' @author Asael Alonzo Matamoros
 #' 
 #' @return a vector with the proposed jump
 #' 
-step <- function(y,prop,scale,Hastings = TRUE,
-                 dif_adjust = FALSE,mala = FALSE) {
-  reject = 1
-  ls = diff_adjustment(prop, scale, dif_adjust,mala)
-  proposed = rjump(prop = ls$prop, scale = ls$scale)
-
+step <- function(y, prev, scale, Hastings = TRUE) {
+  
   u  =  runif(1)
-  t1 = target(y, proposed) + Hastings*djump(prop, ls$prop, ls$scale) 
-  t2 = target(y, prop) + Hastings*djump(proposed, ls$prop, ls$scale) 
-  et = exp(t1 - t2)
-  et = ifelse(is.na(et),0,et)
-  accept_prob = min(1,et)
+  proposed = as.numeric(mvtnorm::rmvnorm(1,mean = prev,sigma = scale))
+  
+  t1 = target(y, proposed) + mvtnorm::dmvnorm(prev, proposed, scale) 
+  t2 = target(y, prev) + mvtnorm::dmvnorm(proposed, prev, scale) 
+  accept_prob = exp(t1 - t2)
+  accept_prob = ifelse(is.na(accept_prob),0,accept_prob)
   
   if(u <= accept_prob){
     value = proposed
-    reject = 0
+    accepted = TRUE
   }else{
-    value = prop
+    value = prev
+    accepted = FALSE
   }
   
-  out = list(value = value,reject = reject)
+  out = list(value = value, accepted = accepted)
   return(out)
 }
 
 #' Generate a proposed value from a Jump distribution
 #' 
-#' @param prop a vector with the proposed parameters from previous
+#' @param loc a vector with the proposed parameters from previous
 #' iteration.
 #' @param scale a covariance matrix used in the Gaussian Jump distribution
 #' 
@@ -208,16 +202,16 @@ step <- function(y,prop,scale,Hastings = TRUE,
 #' @return a vector following a Gaussian distribution of dimension d,
 #' with mean = prop, and covariance matrix C = scale.
 #' 
-rjump <- function(prop,scale){
-  d = length(prop)
+rjump <- function(loc,scale){
+  d = length(loc)
   x = as.numeric(scale%*%rnorm(n = d))
-  return(x + prop)
+  return(x + loc)
 }
 
 #' Evaluate the density of a Gaussian distribution used as Jump density
 #' 
 #' @param proposed a vector to evaluate the multivariate density.
-#' @param prop a vector with the proposed parameters from previous
+#' @param loc a vector with the proposed parameters from previous
 #' iteration.
 #' @param scale a covariance matrix used in the Gaussian Jump distribution
 #' 
@@ -226,50 +220,14 @@ rjump <- function(prop,scale){
 #' @return a vector following a Gaussian distribution of dimension d,
 #' with mean = prop, and covariance matrix C = scale.
 #' 
-djump <- function(proposed,prop,scale){
-  d = length(proposed)
-  
-  z = solve(scale)%*%(proposed - prop)
+djump <- function(proposed, loc, scale){
+
+  z = solve(scale)%*%(proposed - loc)
   d2 = dnorm(z,log = TRUE)
   
   return(sum(d2))
 }
-#' Estimate the mean and covariance using a differential adjustment
-#' 
-#' The values are obtained by applying:
-#'   
-#'   opt = arg_max(target)
-#'   mu  = opt + Sigma* GRAD(target(opt))
-#'   Sigma^{-1} = -Hessian(target(opt))
-#' 
-#' @param prop a vector with the proposed parameters from previous
-#' iteration.
-#' @param scale a covariance matrix used in the Gaussian Jump distribution
-#' @param dif_adjust performs a differential adjustment to perform a Jump
-#' candidate in the Metropolis step.
-#' 
-#' @return if `dif_adjut` is `TRUE` returns a list with the adjusted mean 
-#' and covariance, if `FALSE` returns a list with the original values.
-#' 
-diff_adjustment <- function(prop,scale,dif_adjust = FALSE, mala = FALSE){
-  t_prop = function(par) target(y,par)
-  
-  if(dif_adjust){
-    opt = optim(prop,fn =  function(par) -target(y,par))$par
-    
-    scale = chol2inv(
-      -numDeriv::hessian(t_prop,x = opt)
-    )
-    
-    prop = scale %*% numDeriv::grad(t_prop,x = opt)
-    prop = opt + as.numeric(prop)  
-  }
-  if(mala){
-    prop = prop + as.numeric(scale %*% numDeriv::grad(t_prop,x = prop))
-    scale = 2*scale
-  }
-  return(list(prop = prop,scale = chol(scale) ))
-}
+
 #' Evaluates the target function in a metropolis step
 #' 
 #'  target(y,theta) = log_lik(y,theta) + log_prior(theta)

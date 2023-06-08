@@ -23,7 +23,7 @@ Este cuaderno hace un prueba de la funcionalidad del algoritmo de Metropolis imp
 
 $$
 y  \sim GEV(\mu,\sigma,\alpha),\\
-\mu \sim N(0,1), \quad \sigma \sim logN(1,1) \ alpha \sim beta(2,2).
+\mu \sim N(0,1), \quad \sigma \sim logN(1,1) \ k \sim beta(2,2).
 $$
 
 Los datos se simulan mediante el siguiente codigo:
@@ -52,13 +52,13 @@ loglik <- function(y,theta){
 # Calculo de la log prior logP(theta)
 log_prior <- function(theta){
   d1 = dnorm(theta[1],mean = 0,sd = 1,log = TRUE)
-  d2 = dgamma(theta[2],5,2.5,log = TRUE)
+  d2 = dgamma(theta[2],shape = 5,rate = 2.5,log = TRUE)
   return(d1+d2)
 }
 
 # Generacion de los valores iniciales
-inits <- function( ){
-  c(rnorm(1),abs(rnorm(1))+0.001)
+inits <- function(){
+  c(rnorm(1),rgamma(1,5,2.5))
 }
 ```
 
@@ -66,15 +66,15 @@ inits <- function( ){
 Ahora bien, procedemos a generar nuestras cadenas de Markov usando el algoritmo de Metropolis. En este caso la función de salto es una normal multivariada simétrica $proposed \sim N_2(prop,diag(1,1))$, con matriz de covarianza siendo la matriz identidad. Se generaron 4 cadenas de Markov de un total de 10,000 iteraciones por cadena (`iter = 10,000`), donde se eliminaron las primeras 2,000 iteraciones (`burn-in = 2000`), y se aceptaron los saltos de cada 5 tiempos (`lag = 5`) para evitar que las cadenas se quedaran estancadas.
 
 ```{r,warning=FALSE}
-scale_mat =  0.5*diag(2)
+scale_mat = 0.5*diag(2)
 
-post1 = sampling(y = y, scale = scale_mat, iter = 1000,thin = 2,mala = TRUE)
+post1 = sampling(y = y, scale = scale_mat, iter = 5000, thin = 5)
 ```
 
 Los resultados obtenidos muestran convergencia en las cadenas $\hat R \approx 1$, y los tamaños de muestra efectivos son lo suficientemente grandes, como para aceptar las simulaciones obtenidas. Notemos que las posterior recuperaron los valores reales de $\mu$ (`r mu`), $\sigma$ (`r sigma`) y $\alpha$ (`r alpha`).
 
 ```{r}
-colnames(post1) = c("mu","sigma","reject_rate",".chain")
+colnames(post1) = c("mu","sigma","acceptence_rate",".chain")
 post1_df = as_draws_df(post1)
 
 summarise_draws(post1_df)
