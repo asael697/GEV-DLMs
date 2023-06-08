@@ -114,10 +114,25 @@ sampling <- function(y,chains = 4, iter = 5000, scale = 0.5, thin = 5,
   
   init = inits()
   d = length(init)
-  mu = rep(0,d)
   
   if(length(diag(scale)) != d)
     stop("The dimension of the scale matrix and parameters don't match")
+  
+  mu = rep(0,d)
+  scale = chol(scale)
+  
+  if(diff_adjust) {
+    Hastings = TRUE
+    t_prop = function(par) target(y,par)
+    opt = optim(init,fn =  function(x) -target(y,x))$par
+    
+    hess = -numDeriv::hessian(t_prop,x = opt) 
+    scale = chol2inv(chol(hess)) + scale
+    
+    mu = solve(scale) %*% numDeriv::grad(t_prop,x = opt)
+    mu = opt + as.numeric(mu)
+    scale = chol(scale)
+  }
   
   post = NULL
   
@@ -126,13 +141,13 @@ sampling <- function(y,chains = 4, iter = 5000, scale = 0.5, thin = 5,
     current_state = inits() 
     # burn-in
     for(i in 1:warm_up) {
-      out = step(y,current_state+mu,scale,Hastings)
+      out = step(y,current_state, mu,scale,Hastings)
       current_state = out$value
     }
     # sample
     for(i in 1:iter) {
       for(j in 1:thin) {
-        out = step(y,current_state+mu,scale,Hastings)
+        out = step(y,current_state, mu,scale,Hastings)
         current_state = out$value
       }
       results = rbind(results, c(out$value,out$accepted))
@@ -169,13 +184,14 @@ sampling <- function(y,chains = 4, iter = 5000, scale = 0.5, thin = 5,
 #' 
 #' @return a vector with the proposed jump
 #' 
-step <- function(y, prev, scale, Hastings = TRUE) {
+step <- function(y, prev, mu, scale, Hastings = TRUE) {
   
   u  =  runif(1)
-  proposed = as.numeric(mvtnorm::rmvnorm(1,mean = prev,sigma = scale))
   
-  t1 = target(y, proposed) + mvtnorm::dmvnorm(prev, proposed, scale) 
-  t2 = target(y, prev) + mvtnorm::dmvnorm(proposed, prev, scale) 
+  proposed = rjump(prev + mu,scale)
+  
+  t1 = target(y, proposed) + Hastings*djump(prev, proposed + mu, scale) 
+  t2 = target(y, prev) + Hastings*djump(proposed, prev + mu, scale) 
   accept_prob = exp(t1 - t2)
   accept_prob = ifelse(is.na(accept_prob),0,accept_prob)
   

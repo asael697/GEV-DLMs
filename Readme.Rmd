@@ -68,7 +68,9 @@ Ahora bien, procedemos a generar nuestras cadenas de Markov usando el algoritmo 
 ```{r,warning=FALSE}
 scale_mat = 0.5*diag(2)
 
+start = Sys.time()
 post1 = sampling(y = y, scale = scale_mat, iter = 5000, thin = 5)
+print( Sys.time() - start )
 ```
 
 Los resultados obtenidos muestran convergencia en las cadenas $\hat R \approx 1$, y los tamaños de muestra efectivos son lo suficientemente grandes, como para aceptar las simulaciones obtenidas. Notemos que las posterior recuperaron los valores reales de $\mu$ (`r mu`), $\sigma$ (`r sigma`) y $\alpha$ (`r alpha`).
