@@ -9,8 +9,6 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ```{r,message=FALSE}
-source("Funciones/functions.R")
-
 library(cowplot)
 library(posterior)
 library(bayesplot)
@@ -66,11 +64,13 @@ inits <- function(){
 Ahora bien, procedemos a generar nuestras cadenas de Markov usando el algoritmo de Metropolis. En este caso la función de salto es una normal multivariada simétrica $proposed \sim N_2(prop,diag(1,1))$, con matriz de covarianza siendo la matriz identidad. Se generaron 4 cadenas de Markov de un total de 10,000 iteraciones por cadena (`iter = 10,000`), donde se eliminaron las primeras 2,000 iteraciones (`burn-in = 2000`), y se aceptaron los saltos de cada 5 tiempos (`lag = 5`) para evitar que las cadenas se quedaran estancadas.
 
 ```{r,warning=FALSE}
-scale_mat = 0.5*diag(2)
+source("Funciones/functions.R")
+scale_mat = matrix(c(5,0.1,0.1,2),ncol = 2)
+#scale_mat = 0.5*diag(2)
 
 start = Sys.time()
-post1 = sampling(y = y, scale = scale_mat, iter = 5000, thin = 5)
-print( Sys.time() - start )
+post1 = sampling(y = y, scale = scale_mat, iter = 2000, thin = 1, h = 0.01, MALA = TRUE)
+print( Sys.time() - start)
 ```
 
 Los resultados obtenidos muestran convergencia en las cadenas $\hat R \approx 1$, y los tamaños de muestra efectivos son lo suficientemente grandes, como para aceptar las simulaciones obtenidas. Notemos que las posterior recuperaron los valores reales de $\mu$ (`r mu`), $\sigma$ (`r sigma`) y $\alpha$ (`r alpha`).
@@ -94,7 +94,7 @@ Revisar el ajuste de los datos es una buena praxis para validar los supuestos de
 ```{r,warning=FALSE}
 y_rep = apply(post1,1,FUN = function(x){
   x = as.numeric(x)
-  gev_rng(n = length(y),mu = x[1],sigma = x[2],k = x[3])
+  rnorm(n = length(y),mean = x[1],sd = x[2])
 })
 
 s = sample(1:20000,size = 500)

@@ -110,7 +110,7 @@ FFBS <- function(m0 = 0, C0 = 0.6, FF = 1, G = 1, V = 1,
 #' 
 sampling <- function(y,chains = 4, iter = 5000, scale = 0.5, thin = 5,
                      warm_up = round(iter/2,0), Hastings = TRUE,
-                     diff_adjust = FALSE) {
+                     MALA = FALSE, h = 1) {
   
   init = inits()
   d = length(init)
@@ -118,21 +118,8 @@ sampling <- function(y,chains = 4, iter = 5000, scale = 0.5, thin = 5,
   if(length(diag(scale)) != d)
     stop("The dimension of the scale matrix and parameters don't match")
   
-  mu = rep(0,d)
-  scale = chol(scale)
-  
-  if(diff_adjust) {
-    Hastings = TRUE
-    t_prop = function(par) target(y,par)
-    opt = optim(init,fn =  function(x) -target(y,x))$par
-    
-    hess = -numDeriv::hessian(t_prop,x = opt) 
-    scale = chol2inv(chol(hess)) + scale
-    
-    mu = solve(scale) %*% numDeriv::grad(t_prop,x = opt)
-    mu = opt + as.numeric(mu)
-    scale = chol(scale)
-  }
+
+  scale = sqrt(h)*chol(scale)
   
   post = NULL
   
@@ -141,22 +128,22 @@ sampling <- function(y,chains = 4, iter = 5000, scale = 0.5, thin = 5,
     current_state = inits() 
     # burn-in
     for(i in 1:warm_up) {
-      out = step(y,current_state, mu,scale,Hastings)
+      out = step(y, current_state, h, scale, Hastings, MALA)
       current_state = out$value
     }
     # sample
     for(i in 1:iter) {
       for(j in 1:thin) {
-        out = step(y,current_state, mu,scale,Hastings)
+        out = step(y, current_state, h, scale, Hastings, MALA)
         current_state = out$value
       }
-      results = rbind(results, c(out$value,out$accepted))
+      results = rbind(results, c(out$value, out$accepted))
     }
    post = rbind(post,results) 
   }
   row.names(post) = NULL
   post = as.data.frame(post)
-  post$.chain = sort(rep(1:chains,iter))
+  post$.chain = sort(rep(1:chains, iter))
   
   return(post)
 }
@@ -184,19 +171,23 @@ sampling <- function(y,chains = 4, iter = 5000, scale = 0.5, thin = 5,
 #' 
 #' @return a vector with the proposed jump
 #' 
-step <- function(y, prev, mu, scale, Hastings = TRUE) {
+step <- function(y, prev, h = 1, scale, Hastings = TRUE, MALA = FALSE) {
   
   u  =  runif(1)
   
-  proposed = rjump(prev + mu,scale)
+  ml1 = mala_step(x = prev, h = h, scale = scale, MALA = MALA)
   
-  t1 = target(y, proposed) + Hastings*djump(prev, proposed + mu, scale) 
-  t2 = target(y, prev) + Hastings*djump(proposed, prev + mu, scale) 
+  prop = rjump(prev + ml1, scale)
+  
+  ml2 = mala_step(x = prop, h = h, scale = scale, MALA = MALA)
+  
+  t1 = target(y, prop) + Hastings*djump(prev, prop + ml1, scale)
+  t2 = target(y, prev) + Hastings*djump(prop, prev + ml2, scale)
   accept_prob = exp(t1 - t2)
   accept_prob = ifelse(is.na(accept_prob),0,accept_prob)
   
   if(u <= accept_prob){
-    value = proposed
+    value = prop
     accepted = TRUE
   }else{
     value = prev
@@ -218,7 +209,7 @@ step <- function(y, prev, mu, scale, Hastings = TRUE) {
 #' @return a vector following a Gaussian distribution of dimension d,
 #' with mean = prop, and covariance matrix C = scale.
 #' 
-rjump <- function(loc,scale){
+rjump <- function(loc, scale){
   d = length(loc)
   x = as.numeric(scale%*%rnorm(n = d))
   return(x + loc)
@@ -293,4 +284,15 @@ log_lik <- function(y,post){
 #' 
 log_prior <- function(theta){
   return(0)
+}
+
+t_prop = function(x) target(y,x)
+
+mala_step <-function(x, h = 1, scale, MALA = FALSE){
+  r = 0
+  if(MALA){
+    r = h*scale%*%numDeriv::grad(func = t_prop,x)/2
+    r = as.numeric(r)
+  }
+  return(r)
 }
