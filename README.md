@@ -70,7 +70,8 @@ cadenas de Markov de un total de 10,000 iteraciones por cadena
     set.seed(32494)
 
     start = Sys.time()
-     post1 = sampling(y = y, scale = 2*diag(3), iter = 2000, warm_up = 5000, thin = 50, h = 0.1)
+     post1 = sampling(y = y, scale = 2*diag(3), iter = 2000,
+               warm_up = 5000, thin = 50, h = 0.1)
     print(Sys.time() - start)
 
     ## Time difference of 1.134805 mins
