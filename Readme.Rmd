@@ -27,11 +27,14 @@ $$
 Los datos se simulan mediante el siguiente codigo:
 
 ```{r}
+eff_seed <- sample(1:2^15, 1)
+set.seed(25746)
+
 #priors
-preal = c(rnorm(1),rgamma(1,5,2.5))
+preal = c(rnorm(1),rlnorm(1,meanlog = 1),rnorm(1))
 
 # datos
-y = rnorm(n = 250,mean = preal[1], sd = preal[2])
+y = SpatialExtremes::rgev(259,preal[1],scale = preal[2],shape = preal[3])
 
 ggplot(data.frame(y),aes(x = y))+geom_density(fill = "darkred")+
   labs(x = "y",y = "conteo",title = "Histograma de los datos simulados y")
@@ -43,68 +46,77 @@ Ahora bien, previo a la estimacion de los parametros, actualizamos las funciones
 ```{r}
 # Estimacion de la log-verosimilitud
 loglik <- function(y,theta){
-    d = dnorm(y,mean = theta[1], sd = theta[2],log = TRUE)
+    d = SpatialExtremes::dgev(y,loc = theta[1],scale = sign(theta[2])*theta[2],
+                              shape = theta[3],log = TRUE)
     return(sum(d))
 }
 
 # Calculo de la log prior logP(theta)
 log_prior <- function(theta){
   d1 = dnorm(theta[1],mean = 0,sd = 1,log = TRUE)
-  d2 = dgamma(theta[2],shape = 5,rate = 2.5,log = TRUE)
+  d2 = 2*dt(sign(theta[2])*theta[2],df = 5,ncp = 1,log = TRUE)
   return(d1+d2)
 }
 
 # Generacion de los valores iniciales
 inits <- function(){
-  c(rnorm(1),rgamma(1,5,2.5))
+  c(rnorm(1),rlnorm(1,1),rnorm(1))
 }
 ```
-
 
 Ahora bien, procedemos a generar nuestras cadenas de Markov usando el algoritmo de Metropolis. En este caso la función de salto es una normal multivariada simétrica $proposed \sim N_2(prop,diag(1,1))$, con matriz de covarianza siendo la matriz identidad. Se generaron 4 cadenas de Markov de un total de 10,000 iteraciones por cadena (`iter = 10,000`), donde se eliminaron las primeras 2,000 iteraciones (`burn-in = 2000`), y se aceptaron los saltos de cada 5 tiempos (`lag = 5`) para evitar que las cadenas se quedaran estancadas.
 
 ```{r,warning=FALSE}
 source("Funciones/functions.R")
-scale_mat = matrix(c(5,0.1,0.1,2),ncol = 2)
-#scale_mat = 0.5*diag(2)
+set.seed(32494)
 
 start = Sys.time()
-post1 = sampling(y = y, scale = 2*diag(2), iter = 2000, thin = 1, h = 0.001, MALA = TRUE)
-print( Sys.time() - start)
+ post1 = sampling(y = y, scale = 2*diag(3), iter = 2000, warm_up = 5000, thin = 50, h = 0.1)
+print(Sys.time() - start)
 ```
 
-Los resultados obtenidos muestran convergencia en las cadenas $\hat R \approx 1$, y los tamaños de muestra efectivos son lo suficientemente grandes, como para aceptar las simulaciones obtenidas. Notemos que las posterior recuperaron los valores reales de $\mu$ (`r mu`), $\sigma$ (`r sigma`) y $\alpha$ (`r alpha`).
+Los resultados obtenidos muestran convergencia en las cadenas $\hat R \approx 1$, y los tamaños de muestra efectivos son lo suficientemente grandes, como para aceptar las simulaciones obtenidas. Notemos que las posterior recuperaron los valores reales de $\mu$ (`r preal[1]`), $\sigma$ (`r preal[2]`) y $k$ (`r preal[3]`).
 
 ```{r}
-colnames(post1) = c("mu","sigma","acceptence_rate",".chain")
+colnames(post1) = c("mu","sigma","k","acceptance_rate",".chain")
 post1_df = as_draws_df(post1)
 
 summarise_draws(post1_df)
 ```
 
-
 Ademas, las cadenas y densidades de las posterioris muestran que las cadenas se mezclaron y no se observa multi-modalidad, por lo tanto aceptamos las simulaciones obtenidas del algoritmo
 
 ```{r}
-mcmc_combo(post1_df,pars = c("mu","sigma"))
+mcmc_combo(post1_df,pars = c("mu","sigma","k"))
 ```
 
 Revisar el ajuste de los datos es una buena praxis para validar los supuestos del modelo, para eso es necesario realizar posterior predictive checks. En este caso, extraemos 500 simulaciones aleatorias, y las comparamos con los datos reales. El gráfico siguiente muestra que el modelo provee un buen ajuste de los datos.
 
 ```{r,warning=FALSE}
+color_scheme_set("viridisC")
+
 y_rep = apply(post1,1,FUN = function(x){
   x = as.numeric(x)
-  rnorm(n = length(y),mean = x[1],sd = x[2])
+  SpatialExtremes::rgev(259,loc = x[1],scale = x[2],shape = x[3])
 })
 
-s = sample(1:20000,size = 500)
-ppc_dens_overlay(y = y,yrep = t(y_rep[,s]))
+s = sample(1:8000,size = 500)
+y_rep_try = t(y_rep)[s,]
+
+ppc_dens_overlay(y = y,yrep = y_rep_try)
 ```
 
 Finalmente, realizamos validacion cruzada para determinar el ajuste del modelo, para eso es necesario computar la matriz de de log-verosimilitud, al aproximar la elpd (Expected log-predictive density) notamos que no hay advertencias de un mal ajusto de los valores de pareto, por lo tanto aceptamos el modelo propuesto.
 
 ```{r,warning=FALSE}
-LL = log_lik(y,post1)
+
+log_lik <- function(y,theta) {
+ t(apply(theta,1,function(theta)
+    SpatialExtremes::dgev(y,loc = theta[1],scale = sign(theta[2])*theta[2],
+                              shape = theta[3],log = TRUE)
+  ))
+}
+LL  = log_lik(y,post1)
 
 loo1 = loo(LL, relative_eff(exp(LL)))
 loo1

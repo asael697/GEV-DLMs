@@ -110,27 +110,30 @@ FFBS <- function(m0 = 0, C0 = 0.6, FF = 1, G = 1, V = 1,
 #' 
 sampling <- function(y,chains = 4, iter = 5000, scale = 0.5, thin = 5,
                      warm_up = round(iter/2,0), Hastings = TRUE,
-                     MALA = FALSE, h = 1) {
+                     MALA = FALSE, h = 1,seed = NULL) {
   
+  if(!is.null(seed)){
+    set.seed(seed)
+  }
+  
+  post = NULL
   init = inits()
   d = length(init)
   
   if(length(diag(scale)) != d)
     stop("The dimension of the scale matrix and parameters don't match")
   
-
   scale = sqrt(h)*chol(scale)
-  
-  post = NULL
   
   for(k in 1:chains){
     results = NULL
-    current_state = inits() 
+    current_state = inits()
     # burn-in
     for(i in 1:warm_up) {
-      out = step(y, current_state, h, scale, Hastings, MALA)
+      out = step(y, current_state, h, scale, Hastings)
       current_state = out$value
     }
+    current_state = current_state
     # sample
     for(i in 1:iter) {
       for(j in 1:thin) {
@@ -289,10 +292,17 @@ log_prior <- function(theta){
 t_prop = function(x) target(y,x)
 
 mala_step <-function(x, h = 1, scale, MALA = FALSE){
-  r = 0
+  d = length(x)
+  r = rep(0,d)
   if(MALA){
-    r = h*scale%*%numDeriv::grad(func = t_prop,x)/2
-    r = as.numeric(r)
+    r = try(h*scale%*%numDeriv::grad(func = t_prop,x)/2,silent = TRUE)
+    if(inherits(mtry, "try-error")){
+      r = rep(0,d)
+    }else{
+      r = as.numeric(r) 
+    }
   }
   return(r)
 }
+
+
