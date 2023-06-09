@@ -13,7 +13,7 @@ ecuaciones
 
 $$
 y  \sim GEV(\mu,\sigma,\alpha),\\
-\mu \sim N(0,1), \quad \sigma \sim logN(1,1) \ k \sim beta(2,2).
+\mu \sim N(0,1), \quad \sigma \sim logN(1,1) \ k \sim rnom(0,1).
 $$
 
 Los datos se simulan mediante el siguiente codigo:
@@ -36,8 +36,7 @@ Previo a la estimacion de los parametros, actualizamos las
 funciones `loglik()`, `log_prior()` y `inits()` para que calculen la
 verosimilitud, el logaritmo de la prior y valores iniciales, de forma
 correcta. Estas funciones son necesarias para el salto de Metropolis
-(`metropolis_step`) y para la iniciacion correcta del algoritmo
-(`metropolis_sampler()`).
+y para la iniciacion correcta del algoritmo.
 
     # Estimacion de la log-verosimilitud
     loglik <- function(y,theta){
