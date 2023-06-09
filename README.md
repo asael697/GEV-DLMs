@@ -13,7 +13,7 @@ ecuaciones
 
 $$
 y  \sim GEV(\mu,\sigma,\alpha),\\
-\mu \sim N(0,1), \quad \sigma \sim logN(1,1) \\k \sim beta(2,2).
+\mu \sim N(0,1), \quad \sigma \sim logN(1,1) \ k \sim beta(2,2).
 $$
 
 Los datos se simulan mediante el siguiente codigo:
