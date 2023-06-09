@@ -108,7 +108,7 @@ FFBS <- function(m0 = 0, C0 = 0.6, FF = 1, G = 1, V = 1,
 #' which stats if the current jump was rejected.
 #' 
 #' 
-sampling <- function(y,chains = 4, iter = 5000, scale = 0.5, thin = 5,
+sampling <- function(y,chains = 4, iter = 5000, scale = 0.5, thin = 0,
                      warm_up = round(iter/2,0), Hastings = TRUE,
                      MALA = FALSE, h = 1,seed = NULL) {
   
@@ -296,7 +296,7 @@ mala_step <-function(x, h = 1, scale, MALA = FALSE){
   r = rep(0,d)
   if(MALA){
     r = try(h*scale%*%numDeriv::grad(func = t_prop,x)/2,silent = TRUE)
-    if(inherits(mtry, "try-error")){
+    if(inherits(r, "try-error")){
       r = rep(0,d)
     }else{
       r = as.numeric(r) 
