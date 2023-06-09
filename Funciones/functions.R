@@ -22,16 +22,37 @@
 #' 
 #' @return an array mu of dimension n X samples x p
 #' 
+
 FFBS <- function(m0 = 0, C0 = 0.6, FF = 1, G = 1, V = 1, 
-                 W = 1, n, m = 1, p = 1, data, samples){
+                 W = 1, data, samples){
   
-  at <- mt <- mts <- Mt <-  theta_t <- matrix(ncol = n,nrow = p)
-  Rt <- Ct <- Cts <- Bts <- array(dim = c(n,p,p))
-  ft <- et <-h_t <- H_t <- matrix(ncol = n,nrow = m)
-  Qt <- matrix(ncol = n,nrow = m)
-  At <- array(dim = c(n,p,n))
-  Theta_t_mayus <- theta_t <- matrix(0,ncol = n,nrow = p)
+  if(is.numeric(data)){
+    data = t(data)
+  }
+  T = dim(data)[2]
+  n = dim(data)[1]
+  p = length(m0)
   
+  at = matrix(ncol = T, nrow = p)
+  Rt = array(dim = c(T, p, p))
+  ft = matrix(ncol = T, nrow = n)
+  Qt = matrix(ncol = T, nrow = n)
+  Ct = array(dim = c(T, p, p))
+  mt = matrix(ncol = T, nrow = p)
+  et = matrix(ncol = T, nrow = n)
+  At = array(dim = c(T, p, n))
+  
+  mts = matrix(ncol = T,nrow = p)
+  Cts = array(dim = c(T, p, p))
+  Bts = array(dim=c(T, p, p))
+
+  M_t =matrix(0,ncol=T,nrow=p)
+  theta_t =matrix(0, ncol = T, nrow = p)
+  Theta_t_mayus = matrix(0, ncol = T, nrow = p)
+  
+  h_t = matrix(0, ncol = T, nrow = n)
+  H_t = matrix(0, ncol = T, nrow = n)
+   
   ##	ECUACIONES ACTUALIZACION PARA t = 1, ... ,length(Go).
   at[,1] = G%*%m0
   Rt[1,,] = (G%*%C0%*%t(G))+W
@@ -44,7 +65,7 @@ FFBS <- function(m0 = 0, C0 = 0.6, FF = 1, G = 1, V = 1,
   
   
   #forward Filter
-  for(t in 2:n){
+  for(t in 2:T){
     at[,t] = G%*%mt[,t-1]    
     Rt[t,,] = (G%*%Ct[t-1,,]%*%t(G)) + W
     ft[,t] = FF%*%at[,t]
