@@ -1,3 +1,5 @@
+## Estimacion de un modelo GEV simple
+
     library(cowplot)
     library(posterior)
     library(bayesplot)
@@ -30,7 +32,7 @@ Los datos se simulan mediante el siguiente codigo:
 
 ![](Readme_files/figure-markdown_strict/unnamed-chunk-2-1.png)
 
-Ahora bien, previo a la estimacion de los parametros, actualizamos las
+Previo a la estimacion de los parametros, actualizamos las
 funciones `loglik()`, `log_prior()` y `inits()` para que calculen la
 verosimilitud, el logaritmo de la prior y valores iniciales, de forma
 correcta. Estas funciones son necesarias para el salto de Metropolis
