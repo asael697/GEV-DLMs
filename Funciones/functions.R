@@ -314,6 +314,9 @@ forward_filter<-function(y, G = 1, FF = 1, V = 1, W = 1, m0 = 0, C0 = 1){
     if(any(dim(C0) != k))
       stop("Formato invalido para C0, debe ser una matriz de k x k")
     
+    if(any(dim(FF) != c(k,m) ))
+      stop("Formato invalido para FF, debe ser una matriz de k x m")
+    
     if(any(dim(W) != k))
       stop("Formato invalido para W, debe ser una matriz de k x k")
     
