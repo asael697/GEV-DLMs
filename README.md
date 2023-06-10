@@ -30,7 +30,7 @@ Los datos se simulan mediante el siguiente codigo:
     ggplot(data.frame(y),aes(x = y))+geom_density(fill = "darkred")+
       labs(x = "y",y = "conteo",title = "Histograma de los datos simulados y")
 
-![](Readme_files/figure-markdown_strict/unnamed-chunk-2-1.png)
+![](Figures/unnamed-chunk-2-1.png)
 
 Previo a la estimacion de los parametros, actualizamos las
 funciones `loglik()`, `log_prior()` y `inits()` para que calculen la
@@ -102,7 +102,7 @@ aceptamos las simulaciones obtenidas del algoritmo
 
     mcmc_combo(post1_df,pars = c("mu","sigma","k"))
 
-![](Readme_files/figure-markdown_strict/unnamed-chunk-6-1.png)
+![](Figures/unnamed-chunk-6-1.png)
 
 Revisar el ajuste de los datos es una buena praxis para validar los
 supuestos del modelo, para eso es necesario realizar posterior
@@ -122,7 +122,7 @@ el modelo provee un buen ajuste de los datos.
 
     ppc_dens_overlay(y = y,yrep = y_rep_try)
 
-![](Readme_files/figure-markdown_strict/unnamed-chunk-7-1.png)
+![](Figures/nnamed-chunk-7-1.png)
 
 Finalmente, realizamos validacion cruzada para determinar el ajuste del
 modelo, para eso es necesario computar la matriz de de
