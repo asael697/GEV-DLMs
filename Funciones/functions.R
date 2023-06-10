@@ -1,109 +1,4 @@
-#' Forward Filtering Backward Sampling algorithm
-#' simulates the states parameters in Dynamic linear model
-#' 
-#'   yt = FF mu_t + et, et ~ N(0,W)
-#'   mu_t = G mu_{t-1} + vt, vt ~ N(0,V)
-#'   y0 ~ N(m0,C0)
-#' The function computes the distribution of the states parameters
-#' p(mu_t | y1,y2,...,yt)
-#' 
-#' @param m0 is the mean of the initial value y0
-#' @param C0 is the covariance matrix of the initial value y0
-#' @param FF is the link matrix between states (mu_t) and observations (yt)
-#' @param G the transition matrix in the states equation.
-#' @param n is the length of the data set n = length(y_t)
-#' @param m is the dimension of the data yt in R^m
-#' @param p is the dimension of the state parameters mu_t in R^p.
-#' @param data a matrix of dimensions m rows and n cols containing the data set.
-#' @param samples an integer with the amount of samples for approximating the
-#' latent distribution of mu_t | y_t.
-#' 
-#' @author Elvis Arrazola y Cristian Cruz
-#' 
-#' @return an array mu of dimension n X samples x p
-#' 
-
-FFBS <- function(m0 = 0, C0 = 0.6, FF = 1, G = 1, V = 1, 
-                 W = 1, data, samples){
-  
-  if(is.numeric(data)){
-    data = t(data)
-  }
-  T = dim(data)[2]
-  n = dim(data)[1]
-  p = length(m0)
-  
-  at = matrix(ncol = T, nrow = p)
-  Rt = array(dim = c(T, p, p))
-  ft = matrix(ncol = T, nrow = n)
-  Qt = matrix(ncol = T, nrow = n)
-  Ct = array(dim = c(T, p, p))
-  mt = matrix(ncol = T, nrow = p)
-  et = matrix(ncol = T, nrow = n)
-  At = array(dim = c(T, p, n))
-  
-  mts = matrix(ncol = T,nrow = p)
-  Cts = array(dim = c(T, p, p))
-  Bts = array(dim=c(T, p, p))
-
-  M_t =matrix(0,ncol=T,nrow=p)
-  theta_t =matrix(0, ncol = T, nrow = p)
-  Theta_t_mayus = matrix(0, ncol = T, nrow = p)
-  
-  h_t = matrix(0, ncol = T, nrow = n)
-  H_t = matrix(0, ncol = T, nrow = n)
-   
-  ##	ECUACIONES ACTUALIZACION PARA t = 1, ... ,length(Go).
-  at[,1] = G%*%m0
-  Rt[1,,] = (G%*%C0%*%t(G))+W
-  ft[,1] = FF%*%at[,1]
-  Qt[,1] = FF%*%Rt[1,,]%*%t(FF) + V
-  At[1,,] = Rt[1,,]%*%t(FF)%*%solve(Qt[,1])
-  et[,1] = data[,1] - ft[,1]  
-  mt[,1] = at[,1] + At[1,,]%*%t(et[,1])
-  Ct[1,,] = Rt[1,,] - At[1,,]%*%t(Qt[1,1])%*%t(At[1,,])
-  
-  
-  #forward Filter
-  for(t in 2:T){
-    at[,t] = G%*%mt[,t-1]    
-    Rt[t,,] = (G%*%Ct[t-1,,]%*%t(G)) + W
-    ft[,t] = FF%*%at[,t]
-    Qt[,t] = FF%*%Rt[t,,]%*%t(FF) + V
-    At[t,,] = Rt[t,,]%*%t(FF)%*%solve(Qt[,t])
-    et[,t] = data[,t] - ft[,t]  
-    mt[,t] = at[,t] + At[t,,]%*%t(et[,t])
-    Ct[t,,] = Rt[t,,] - At[t,,]%*%t(Qt[,t])%*%t(At[t,,])
-    
-    
-    theta_t[,t] = rnorm(1 , mean =at[,t], sd = sqrt(Rt[t,,]))
-    M_t[,t] = rnorm(1, mean = ft[,t] , sd = sqrt(Qt[,t]))
-    Theta_t_mayus[,t] = rnorm(1 , mean = M_t[,t] , sd = sqrt(Ct[t,,]))
-    
-    H_t[,t] = solve(solve(Ct[t,,])+t(G)%*%solve(W)%*%G)
-    h_t[,t] = H_t[,t]%*%(solve(Ct[t,,])%*%mt[,t] + t(G)%*%solve(W)%*%M_t[,t])
-  }
-  # BACKWARD SAMPLING
-  if(samples == 1){
-    mu = rep(0,n)
-    mu[n] = rnorm(1,at[,n],sqrt(Ct[n,,]))
-    for (t in (n-1):1) {
-      mu[t] = rnorm(1,h_t[,(t+1)],sqrt(H_t[,(t+1)]))
-    }
-  }else{
-    #mus = matrix(0,samples,T)
-    mu <- array(dim = c(n,samples,p))
-    mu[n,,] = rnorm(samples,at[,n],sqrt(Ct[n,,]))
-    
-    for (t in (n-1):1) {
-      mu[t,,] = rnorm(samples,h_t[,(t+1)],sqrt(H_t[,(t+1)]))
-    }
-  }
-
-  return(mu)
-} 
-
-#' Metropolis Sampler algorithm
+ #' Metropolis Sampler algorithm
 #' 
 #' Generates different Markov Chains with the simulated marginal posteriors
 #' 
@@ -277,6 +172,21 @@ target <- function(y,theta){
   t = loglik(y,theta) + log_prior(theta)
   return(t)
 }
+#' Evaluates the target function in a metropolis step
+#' for a constant data set y
+#' 
+#'  target(y,theta) = log_lik(y,theta) + log_prior(theta)
+#'  
+#' @param x a a vector of the unknown parameters to be evaluated in 
+#' the prior density.
+#' 
+#' @author Asael Alonzo Matamoros
+#' 
+#' @return a real value with the image of the target distribution
+#' 
+t_prop = function(x) {
+  target(y,x)
+}
 
 #' Computes the Log_likelihood matrix 
 #' 
@@ -310,8 +220,24 @@ log_prior <- function(theta){
   return(0)
 }
 
-t_prop = function(x) target(y,x)
-
+#' MALA step 
+#' 
+#' Performs a MAetropolis Adjusted Lavenging algorithm steo
+#' 
+#' @param x vector with the current metropolis step.
+#' @param h scale correction for a scale adjusted Metropolis.
+#' @param scale scale matrix for the proposed Jump distribution
+#' @param mala Boolean that indicates a MALA step for the Jump candidate in
+#' the Metropolis step.
+#' 
+#' This function generates a  MCMC step using one of the three algorithms:
+#'  - if MALA == TRUE, returns thr h GRAD (log f(x))/2 MALA factor
+#'  - else returns 0
+#' 
+#' @author Asael Alonzo Matamoros
+#' 
+#' @return a vector with the proposed MALA step
+#' 
 mala_step <-function(x, h = 1, scale, MALA = FALSE){
   d = length(x)
   r = rep(0,d)
@@ -324,6 +250,125 @@ mala_step <-function(x, h = 1, scale, MALA = FALSE){
     }
   }
   return(r)
+}
+
+#' Kalman Filtering update equations
+#' 
+#' Obtain the mean and covariance parameters of the posterior of mu
+#' when applying a Vanilla Kalman Filter for a constan DLM model
+#' 
+#'   yt = FF mu_t + et, et ~ N(0,W)
+#'   mu_t = G mu_{t-1} + vt, vt ~ N(0,V)
+#'   y0 ~ N(m0,C0)
+#'   
+#' The function computes the poserior of the states parameters
+#' p(mu_t | y1,y2,...,yt)
+#' 
+#' @param y a matrix of dimensions of k columns and n rows containing 
+#' a sample of  `n` elements `y` of dimension `m`.
+#' @param m0 is the mean vector [k] with mean for the prior of the y0.
+#' @param C0 is the covariance matrix [k,k] with the the initial value y0
+#' @param FF is the link matrix between states (mu_t) and observations (yt)
+#' @param G the transition matrix of dimension `kxk` for the states equation.
+#' @param samples an integer with the amount of samples for approximating the
+#' latent distribution of mu_t | y_t.
+#' 
+#' @author Asael Alonzo Matamoros
+#' 
+#' @return Returns a list with parameters of the posterior of mu_t at every step
+#' 
+#' the list lt = list(mt, Ct), where: 
+#'  
+#'   - mt is a data frame of n row and k columns.
+#'   - Ct is an array of matrix with dimensions c(n,k,k)
+#' 
+#' Such that for every time-step the posterior of mu_t is:
+#'    
+#'    mu_t | y1,y2,...,yt ~ N(mt, C_t)
+#' 
+forward_filter<-function(y, G = 1, FF = 1, V = 1, W = 1, m0 = 0, C0 = 1){
+  
+  # filter dimensions
+  if(is.matrix(y)){
+    n = nrow(y)
+    m = ncol(y)
+    
+    if(any(dim(V) != m))
+      stop("Formato invalido para W, debe ser una matriz de m x m")
+    
+  }else{
+    n = length(y)
+    m = 1
+    y = matrix(y,ncol = 1)
+    
+    if(!is.numeric(V) || length(V) != 1)
+      stop("Formato invalido para V, debe ser un numero real positivo")
+  }
+  
+  if(is.matrix(G)){
+    k = ncol(G)
+    
+    if(any(length(m0) != k))
+      stop("Formato invalido para m0, debe ser un vector de tamanio k")
+    
+    if(any(dim(C0) != k))
+      stop("Formato invalido para C0, debe ser una matriz de k x k")
+    
+    if(any(dim(W) != k))
+      stop("Formato invalido para W, debe ser una matriz de k x k")
+    
+  }else{
+    if(is.numeric(G) && length(G) == 1){
+      k = 1
+      
+      if(!is.numeric(m0) || length(m0) != 1)
+        stop("Formato invalido para m0, debe ser un numero real")
+      
+      if(!is.numeric(C0) || length(C0) != 1)
+        stop("Formato invalido para C0, debe ser un numero real positivo")
+      
+      if(!is.numeric(FF) || length(FF) != 1)
+        stop("Formato invalido para FF, debe ser un numero real")
+      
+      if(!is.numeric(W) || length(W) != 1)
+        stop("Formato invalido para W, debe ser un numero real positivo")
+      
+    }else{
+      stop("Formato invalido para G, debe ser una matriz o un numero real") 
+    }
+  }
+  
+  
+  # initial values
+  mt = m_temp = m0
+  C_temp = C0
+  Ct = list(C0)
+  
+  for(t in 1:n){
+    # prior at t
+    a = as.numeric(G%*%m_temp)
+    R = (G%*%C_temp %*%t(G)) + W
+    
+    # Marginal likelihood: 
+    f = as.numeric( t(FF) %*% a)
+    Q = (t(FF) %*%R%*%FF) + V
+    
+    # additional computations at t
+    e = as.numeric(y[t,] - f)
+    A = R %*% FF %*% solve(Q)
+    
+    #  Posterior at t
+    m_temp = a + as.numeric(A%*%e)
+    C_temp = R - (A %*%Q%*%t(A))
+    
+    # Append othe historical data
+    mt = rbind(mt,m_temp)
+    row.names(mt) = NULL
+    
+    Ct[[t+1]] = C_temp
+  }
+  pp = list(mt = mt, Ct = Ct)
+  return(pp)
 }
 
 

@@ -6,6 +6,8 @@ output: md_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(
+  collapse = TRUE, fig.path = "Figures/", dev = "png")
 ```
 
 ```{r,message=FALSE}
@@ -17,6 +19,7 @@ library(ggplot2)
 library(loo)
 ```
 
+## Pruebas para validar los MCMC en distribuciones univariadas
 
 Este cuaderno hace un prueba de la funcionalidad del algortimo de Metropolis implementado en el archivo `functions.R`, en este experimento se simularan datos de una normal univariada mediante las siguientes ecuaciones
 
@@ -187,3 +190,59 @@ LL = log_lik(y,post1)
 loo1 = loo(LL, relative_eff(exp(LL)))
 loo1
 ```
+
+## Pruebas para validar el filtro de Kalman hacia adelante
+
+Para validar el algoritmo se simula una serie de tiempo multivariada de dimension $m = 2$ y tamaño $n = 250$ observaciones. Los parámetros latentes $\mu_t \in \mathbb R^3$, Usando un DLM constante. En este caso, las matrices $G, FF, V$ y $W$ se simulan aleatoriamente, y los parametros latentes iniciales son: 
+
+$$m_0 = [0,0,0] \quad u \quad C_0 = 100*diag(1,1,1).$$
+Dicha serie de tiempo se simula mediante el siguiente codigo
+
+```{r}
+library(dlm)
+
+rm = dlmRandom(m = 2,p = 3,nobs = 250)
+```
+
+Los parametros simulados del DLM constante son
+
+```{r}
+list(FF = rm$mod$FF, G = rm$mod$GG, V = rm$mod$V, W = rm$mod$W)
+```
+
+Ajustamos el filtro de Kalman hacia delante con nuestra implementación y la realizada por el paquete `DLM`. Comparamos los resultados de $m_t$ y $C_t$ obtenidos, con la norma 2 para el vector de medias y la norma 1 para las matrices de covarianza.
+
+```{r}
+# Nuestra implementacion 
+kf1 = forward_filter(y = rm$y, G = rm$mod$GG, FF = t(rm$mod$FF),
+               V = rm$mod$V, W = rm$mod$W, m0 = rm$mod$m0,
+               C0 = rm$mod$C0)
+
+# Implementacion paquete DLM
+filt1 = dlmFilter(y = rm$y,mod = rm$mod)
+```
+
+
+$$e_{mt} = || our - dlm||_2$$
+```{r}
+e_mt = kf1$mt - filt1$m
+apply(e_mt,2,function(x) sqrt(sum(x^2)) )
+```
+
+y
+
+$$e_{Ct} = || OUR - DLM||_1$$
+
+```{r}
+e_Ct = rep(0,250)
+
+for (i in 1:250) {
+  C_temp = filt1$U.C[[i]] %*% diag(filt1$D.C[i,]^2) %*% t(filt1$U.C[[i]])
+  e_Ct[i] = norm(kf1$Ct[[i]] - C_temp,type = "1")
+}
+
+summary(e_Ct)
+```
+
+
+Observamos que todos los errores son aproximadamente cero y por lo tanto validamos nuestra implementacion del Filtro de Kalman hacia adelante.

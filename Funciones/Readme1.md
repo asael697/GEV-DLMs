@@ -56,8 +56,7 @@ correcta. Estas funciones son necesarias para el salto de metropolis
 
 Ahora bien, procedemos a generar nuestras cadenas de Markov usando el
 algoritmo de Metropolis. En este caso la funcion de salto es una normal
-multivariada simetrica
-*p**r**o**p**o**s**e**d* ∼ *N*<sub>2</sub>(*p**r**o**p*,*d**i**a**g*(1,1)),
+multivariada simetrica $proposed \sim N(prop,diag(1,1))$,
 con matriz de covarianza siendo la matriz identidad. Se generaron 4
 cadenas de Markov de un total de 10,000 iteraciones por cadena
 (`iter = 10,000`), donde se eliminaron las primeras 2,000 iteraciones
@@ -71,12 +70,12 @@ estancadas.
     post1 = sampling(y,iter = 5000, scale = scale_mat, thin = 3)
     print( Sys.time() - start)
 
-    ## Time difference of 6.46065 secs
+    ## Time difference of 6.340851 secs
 
-Los resultados obtenidos muestran convergencia en las cadenas *R̂* ≈ 1,
+Los resultados obtenidos muestran convergencia en las cadenas $\hat R \approx 1$,
 pero los tamaños de muestra efectivos son lo muy bajos, como para
 aceptar las simulaciones obtenidas. Notemos que las posteriors si
-recuperaron los valores reales de *μ* (-0.5150566) y *σ* (1.1767894),
+recuperaron los valores reales de $\mu$ (-1.2163173) y $\sigma$ (3.1986952),
 pero dada su poca convergencia no quantifican bien la incertidumbre de
 los parametros.
 
@@ -86,12 +85,11 @@ los parametros.
     summarise_draws(post_df)
 
     ## # A tibble: 3 × 10
-    ##   variable         mean median     sd    mad     q5    q95  rhat ess_b…¹ ess_t…²
-    ##   <chr>           <dbl>  <dbl>  <dbl>  <dbl>  <dbl>  <dbl> <dbl>   <dbl>   <dbl>
-    ## 1 mu            -0.148  -0.144 0.123  0.121  -0.350 0.0484  1.01    752.    929.
-    ## 2 sigma          1.25    1.25  0.0916 0.0818  1.10  1.41    1.01    979.   1087.
-    ## 3 accpetence_r…  0.0217  0     0.146  0       0     0       1.00  19192.  19192.
-    ## # … with abbreviated variable names ¹​ess_bulk, ²​ess_tail
+    ##   variable          mean median    sd   mad    q5    q95  rhat ess_bulk ess_tail
+    ##   <chr>            <dbl>  <dbl> <dbl> <dbl> <dbl>  <dbl> <dbl>    <dbl>    <dbl>
+    ## 1 mu              -0.962 -0.967 0.310 0.304 -1.46 -0.448  1.00    4073.    4711.
+    ## 2 sigma            3.24   3.22  0.232 0.223  2.88  3.65   1.00    3956.    4779.
+    ## 3 accpetence_rate  0.112  0     0.315 0      0     1      1.00   18620.      NA
 
 La siguiente visualización muestra las posterios y cadenas para ambos
 parametros, los cadenas quedan en puntos de acumulacion debido al bajo
@@ -111,10 +109,10 @@ Metropolis-Hastings con factor de escala ajustado, en este caso la
 distribution de salto es:
 
 $$x\_k = x\_{k-1} + \sqrt h \Sigma^{1./2} \varepsilon, \quad \varepsilon \sim N\_d(0,I).$$
-Donde *h* es el factor de escala que corrige la matriz de covarianza
-*Σ*, y d es la dimension de los parametros a obtener (*x*). Un mejor
-control de *h* aumentaria la tasa de aceptacion del MCMC. para este caso
-elegimos *h* = 0.01 y reducimos el acortamiento a 1
+Donde $h$ es el factor de escala que corrige la matriz de covarianza
+$\Sigma$, y d es la dimension de los parametros a obtener ($x$). Un mejor
+control de $h$ aumentaria la tasa de aceptacion del MCMC. para este caso
+elegimos $h = 0.01$ y reducimos el acortamiento a 1.
 
     scale_mat  = diag(c(1,1))
 
@@ -122,7 +120,7 @@ elegimos *h* = 0.01 y reducimos el acortamiento a 1
     post1 = sampling(y,iter = 5000, scale = scale_mat, thin = 1, h = 0.1)
     print( Sys.time() - start)
 
-    ## Time difference of 2.817429 secs
+    ## Time difference of 2.774607 secs
 
 El tiempo de ejecucion se ve reducido, ademas que la convergencia y
 tamaño de las cadenas es mejor con respecto al tiempo anterior, y la
@@ -134,12 +132,11 @@ tasa de acceptacion incremento.
     summarise_draws(post_df)
 
     ## # A tibble: 3 × 10
-    ##   variable         mean median     sd    mad     q5    q95  rhat ess_b…¹ ess_t…²
-    ##   <chr>           <dbl>  <dbl>  <dbl>  <dbl>  <dbl>  <dbl> <dbl>   <dbl>   <dbl>
-    ## 1 mu             -0.151 -0.153 0.124  0.127  -0.356 0.0549  1.00   1549.   2063.
-    ## 2 sigma           1.25   1.25  0.0923 0.0903  1.11  1.41    1.00   2000.   2145.
-    ## 3 accpetence_ra…  0.160  0     0.367  0       0     1       1.00  16057.     NA 
-    ## # … with abbreviated variable names ¹​ess_bulk, ²​ess_tail
+    ##   variable          mean median    sd   mad    q5    q95  rhat ess_bulk ess_tail
+    ##   <chr>            <dbl>  <dbl> <dbl> <dbl> <dbl>  <dbl> <dbl>    <dbl>    <dbl>
+    ## 1 mu              -0.971 -0.963 0.310 0.308 -1.49 -0.471  1.00    1876.    2469.
+    ## 2 sigma            3.23   3.21  0.225 0.223  2.88  3.62   1.00    2931.    3445.
+    ## 3 accpetence_rate  0.477  0     0.499 0      0     1      1.00   19263.      NA
 
 La siguiente visualización muestra las posterios y cadenas para ambos
 parametros, las cadenas se visualizan estacionaria y las posteriors
@@ -161,18 +158,18 @@ simetrica, el salto se describe mediante la siguiente ecuación
 
 $$x\_k = x\_{k-1} + h \Sigma \nabla \log f(x\_{k-1})/2 +  \sqrt{h} \Sigma^{1/2}\varepsilon, \quad \varepsilon \sim N\_d(0,I)$$
 
-En este caso *Σ* es la matriz de covarianza de la funcion de salto, h es
-el factor de escala, log *f* es el logaritmo de la funcion objetivo tal
-que *f*(*x*) ∝ *l**i**k**e**l**i**h**o**o**d*(*x*)*π*(*x*), y ∇ es el
-gradiente de una funcion. Se sabe que cuando estos algoritmos usan un
-factor de escala optimo, el salto es ergodico y la tasa de aceptación es
-de alrededor de *r* ≈ 0.56. Empiricamente, se sabe que el factor de
-escala optimo esta en la region 0 &lt; *h* &lt;  &lt; 1.
+En este caso $\Sigma$ es la matriz de covarianza de la funcion de salto,
+h es el factor de escala, $\log f$ es el logaritmo de la funcion objetivo
+tal que $f(x) \propto likelihood(x) \pi(x)$,  y $\nabla$ es el gradiente
+de una funcion. Se sabe que cuando estos algoritmos usan un factor de escala
+optimo, el salto es ergodico y la tasa de aceptación es de alrededor de
+$r \approx 0.56$. Empiricamente, se sabe que el factor de escala optimo esta
+en la region $0 < h << 1$. 
 
-El siguiente codigo genera 2000 iteraciones de un MALA con un warm-up de
-1000 iteraciones, sin acortamiento, y una matriz de covarianza con
-diagonal 1, y 0.1 de covarianza. El factor de escala en este caso es
-bastante cercano a 0, *h* = 0.01.
+El siguiente codigo genera 2000 iteraciones de un MALA con un warm-up de 1000
+iteraciones, sin acortamiento, y una matriz de covarianza con diagonal 1, y 0.1 
+de covarianza. El factor de escala en este caso es bastante cercano a 0, 
+$h = 0.01$.
 
     scale_mat = matrix(c(1,0.1,0.1,1),nrow = 2)
 
@@ -180,7 +177,7 @@ bastante cercano a 0, *h* = 0.01.
     post2 = sampling(y,iter = 2000, scale = scale_mat, thin = 1, h = 0.01,MALA = TRUE)
     print( Sys.time() - start)
 
-    ## Time difference of 12.6727 secs
+    ## Time difference of 12.7072 secs
 
 Aunque los tiempos de ejecución incrementaron debido al computo de los
 gradientes, el metodo solo duplico el tiempo de ejecucion alcanzando la
@@ -195,12 +192,11 @@ metodos anteriores y cercana a la optima.
     summarise_draws(post_df)
 
     ## # A tibble: 3 × 10
-    ##   variable         mean median     sd    mad     q5    q95  rhat ess_b…¹ ess_t…²
-    ##   <chr>           <dbl>  <dbl>  <dbl>  <dbl>  <dbl>  <dbl> <dbl>   <dbl>   <dbl>
-    ## 1 mu             -0.143 -0.145 0.125  0.126  -0.344 0.0661  1.00    637.   1157.
-    ## 2 sigma           1.25   1.24  0.0894 0.0879  1.11  1.40    1.00   1116.   1522.
-    ## 3 accpetence_ra…  0.600  1     0.490  0       0     1       1.00   7777.     NA 
-    ## # … with abbreviated variable names ¹​ess_bulk, ²​ess_tail
+    ##   variable          mean median    sd   mad    q5    q95  rhat ess_bulk ess_tail
+    ##   <chr>            <dbl>  <dbl> <dbl> <dbl> <dbl>  <dbl> <dbl>    <dbl>    <dbl>
+    ## 1 mu              -0.903 -0.916 0.309 0.304 -1.40 -0.374  1.01     187.     470.
+    ## 2 sigma            3.24   3.22  0.236 0.234  2.87  3.64   1.01     272.     412.
+    ## 3 accpetence_rate  0.833  1     0.373 0      0     1      1.00    7321.      NA
 
 Los graficos indican que las cadenas son ergodicas y las posteriors son
 unimodales y simetricas indicando convergencia y una buena
@@ -251,9 +247,9 @@ de pareto, por lo tanto aceptamos el modelo propuesto.
     ## Computed from 20000 by 100 log-likelihood matrix
     ## 
     ##          Estimate   SE
-    ## elpd_loo   -164.7  6.9
-    ## p_loo         1.9  0.4
-    ## looic       329.5 13.7
+    ## elpd_loo   -259.9  6.0
+    ## p_loo         1.6  0.3
+    ## looic       519.8 12.0
     ## ------
     ## Monte Carlo SE of elpd_loo is 0.0.
     ## 
