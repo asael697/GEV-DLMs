@@ -262,7 +262,7 @@ latentes $\mu \in \mathbb R^3$, Usando un DLM constante. En
 este caso, las matrices $G, FF, V$ y $W$ se simulan
 aleatoriamente, y los parametros latentes iniciales son:
 
-$$m_0 = [0, 0, 0] \quad y \quead C_0 = 100*diag([1, 1, 1]).$$
+$$m_0 = [0, 0, 0] \quad y \quad C_0 = 100*diag([1, 1, 1]).$$
 
 Dicha serie de tiempo se simula mediante el siguiente codigo:
 
