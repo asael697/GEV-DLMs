@@ -341,7 +341,6 @@ forward_filter<-function(y, G = 1, FF = 1, V = 1, W = 1, m0 = 0, C0 = 1){
     }
   }
   
-  
   # initial values
   mt = m_temp = m0
   C_temp = C0

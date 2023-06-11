@@ -58,8 +58,7 @@ correcta. Estas funciones son necesarias para el salto de metropolis
 
 Ahora bien, procedemos a generar nuestras cadenas de Markov usando el
 algoritmo de Metropolis. En este caso la funcion de salto es una normal
-multivariada simetrica
-*p**r**o**p**o**s**e**d* ∼ *N*<sub>2</sub>(*p**r**o**p*,*d**i**a**g*(1,1)),
+multivariada simetrica $proposed \sim N_2(prop, dia(1,1))$,
 con matriz de covarianza siendo la matriz identidad. Se generaron 4
 cadenas de Markov de un total de 10,000 iteraciones por cadena
 (`iter = 10,000`), donde se eliminaron las primeras 2,000 iteraciones
@@ -74,10 +73,10 @@ estancadas.
     print( Sys.time() - start)
     ## Time difference of 6.675022 secs
 
-Los resultados obtenidos muestran convergencia en las cadenas *R̂* ≈ 1,
+Los resultados obtenidos muestran convergencia en las cadenas $\hat R approx 1$,
 pero los tamaños de muestra efectivos son lo muy bajos, como para
 aceptar las simulaciones obtenidas. Notemos que las posteriors si
-recuperaron los valores reales de *μ* (-1.2886447) y *σ* (1.0481244),
+recuperaron los valores reales de $\mu$ (-1.2886447) y $\sigma$ (1.0481244),
 pero dada su poca convergencia no quantifican bien la incertidumbre de
 los parametros.
 
@@ -111,10 +110,10 @@ Metropolis-Hastings con factor de escala ajustado, en este caso la
 distribution de salto es:
 
 $$x\_k = x\_{k-1} + \sqrt h \Sigma^{1./2} \varepsilon, \quad \varepsilon \sim N\_d(0,I).$$
-Donde *h* es el factor de escala que corrige la matriz de covarianza
-*Σ*, y d es la dimension de los parametros a obtener (*x*). Un mejor
-control de *h* aumentaria la tasa de aceptacion del MCMC. para este caso
-elegimos *h* = 0.01 y reducimos el acortamiento a 1
+Donde $H$ es el factor de escala que corrige la matriz de covarianza
+$\Sigma$, y d es la dimension de los parametros a obtener ($x$). Un mejor
+control de $h$ aumentaria la tasa de aceptacion del MCMC. para este caso
+elegimos $h = 0.01$ y reducimos el acortamiento a 1
 
     scale_mat  = diag(c(1,1))
 
@@ -159,18 +158,18 @@ simetrica, el salto se describe mediante la siguiente ecuación
 
 $$x\_k = x\_{k-1} + h \Sigma \nabla \log f(x\_{k-1})/2 +  \sqrt{h} \Sigma^{1/2}\varepsilon, \quad \varepsilon \sim N\_d(0,I)$$
 
-En este caso *Σ* es la matriz de covarianza de la funcion de salto, h es
-el factor de escala, log *f* es el logaritmo de la funcion objetivo tal
-que *f*(*x*) ∝ *l**i**k**e**l**i**h**o**o**d*(*x*)*π*(*x*), y ∇ es el
+En este caso $\Sigma$ es la matriz de covarianza de la funcion de salto, h es
+el factor de escala, $\log f$ es el logaritmo de la funcion objetivo tal
+que $f(x) \propto likelihood(x)\pi(x)$, y ∇ es el
 gradiente de una funcion. Se sabe que cuando estos algoritmos usan un
 factor de escala optimo, el salto es ergodico y la tasa de aceptación es
-de alrededor de *r* ≈ 0.56. Empiricamente, se sabe que el factor de
-escala optimo esta en la region 0 &lt; *h* &lt;  &lt; 1.
+de alrededor de $r \approx 0.56$. Empiricamente, se sabe que el factor de
+escala optimo esta en la region $0 < h << 1$.
 
 El siguiente codigo genera 2000 iteraciones de un MALA con un warm-up de
 1000 iteraciones, sin acortamiento, y una matriz de covarianza con
 diagonal 1, y 0.1 de covarianza. El factor de escala en este caso es
-bastante cercano a 0, *h* = 0.01.
+bastante cercano a 0, $h = 0.01$.
 
     scale_mat = matrix(c(1,0.1,0.1,1),nrow = 2)
 
@@ -180,7 +179,7 @@ bastante cercano a 0, *h* = 0.01.
     ## Time difference of 9.080563 secs
 
 Aunque los tiempos de ejecución incrementaron debido al computo de los
-gradientes, el metodo solo duplico el tiempo de ejecucion alcanzando la
+gradientes, el metodo solo duplico el tiempo de ejecución alcanzando la
 convergencia con menos iteraciones que los primeros dos. Donde los
 factores de convergencia y tamños de muestra efectivos se indican
 convergencia y la tasa de aceptación es mucho mayor que la de los
@@ -258,13 +257,14 @@ de pareto, por lo tanto aceptamos el modelo propuesto.
 ## Pruebas para validar el filtro de Kalman hacia adelante
 
 Para validar el algoritmo se simula una serie de tiempo multivariada de
-dimension *m* = 2 y tamaño *n* = 250 observaciones. Los parámetros
-latentes *μ*<sub>*t*</sub> ∈ ℝ<sup>3</sup>, Usando un DLM constante. En
-este caso, las matrices *G*, *F**F*, *V* y *W* se simulan
+dimension $m = 2$ y tamaño $n = 250$ observaciones. Los parámetros
+latentes $\mu \in \mathbb R^3$, Usando un DLM constante. En
+este caso, las matrices $G, FF, V$ y $W$ se simulan
 aleatoriamente, y los parametros latentes iniciales son:
 
-*m*<sub>0</sub> = \[0,0,0\]  *u*  *C*<sub>0</sub> = 100 \* *d**i**a**g*(1,1,1).
-Dicha serie de tiempo se simula mediante el siguiente codigo
+$$m_0 = [0, 0, 0] \quad y \quead C_0 = 100*diag([1, 1, 1]).$$
+
+Dicha serie de tiempo se simula mediante el siguiente codigo:
 
     library(dlm)
     ## 
@@ -302,7 +302,7 @@ Los parametros simulados del DLM constante son
 
 Ajustamos el filtro de Kalman hacia delante con nuestra implementación y
 la realizada por el paquete `DLM`. Comparamos los resultados de
-*m*<sub>*t*</sub> y *C*<sub>*t*</sub> obtenidos, con la norma 2 para el
+$m_t$ y $C_t$ obtenidos, con la norma 2 para el
 vector de medias y la norma 1 para las matrices de covarianza.
 
     # Nuestra implementacion 
@@ -313,7 +313,7 @@ vector de medias y la norma 1 para las matrices de covarianza.
     # Implementacion paquete DLM
     filt1 = dlmFilter(y = rm$y,mod = rm$mod)
 
-*e*<sub>*m**t*</sub> = ||*o**u**r* − *d**l**m*||<sub>2</sub>
+$$e_{mt} = || \text{OUR} - \text{dlm}||_2.$$
 
     e_mt = kf1$mt - filt1$m
     apply(e_mt,2,function(x) sqrt(sum(x^2)) )
@@ -321,7 +321,8 @@ vector de medias y la norma 1 para las matrices de covarianza.
 
 y
 
-*e*<sub>*C**t*</sub> = ||*O**U**R* − *D**L**M*||<sub>1</sub>
+$$e_{Ct} = || \text{OUR} - \text{dlm}||_2.$$
+
 
     e_Ct = rep(0,250)
 
