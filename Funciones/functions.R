@@ -12,10 +12,6 @@
 #' jumps.
 #' @param Hastings performs a Metropolis-Hastings step with an asymmetric Jump
 #' function.
-#' @param diff_adjust Boolean that indicates a differential adjustment For a
-#' Jump candidate in the Metropolis step.
-#' @param mala Boolean that indicates a MALA step for the Jump candidate in
-#' the Metropolis step.
 #' 
 #' @author Asael Alonzo Matamoros
 #' 
@@ -24,9 +20,9 @@
 #' which stats if the current jump was rejected.
 #' 
 #' 
-sampling <- function(y,chains = 4, iter = 5000, scale = 0.5, thin = 0,
-                     warm_up = round(iter/2,0), Hastings = TRUE,
-                     MALA = FALSE, h = 1,seed = NULL) {
+sampling <- function(y,chains = 4, iter = 5000, scale = diag(length(inits())), thin = 1,
+                     warm_up = round(iter/2,0), Hastings = TRUE, h = 1, positive = NULL, 
+                     seed = NULL, refresh = TRUE, add_dlm = NULL) {
   
   if(!is.null(seed)){
     set.seed(seed)
@@ -35,35 +31,63 @@ sampling <- function(y,chains = 4, iter = 5000, scale = 0.5, thin = 0,
   post = NULL
   init = inits()
   d = length(init)
+  iter_seq = seq(0,iter,by = iter/10)
   
   if(length(diag(scale)) != d)
     stop("The dimension of the scale matrix and parameters don't match")
   
   scale = sqrt(h)*chol(scale)
   
+  start = Sys.time()
   for(k in 1:chains){
+    
+    if (refresh) print("")
     results = NULL
-    current_state = inits()
+    current_state = init
+ 
     # burn-in
     for(i in 1:warm_up) {
-      out = step(y, current_state, h, scale, Hastings)
+      out = step(y = y, prev = current_state, h = h, scale = scale, 
+                 Hastings = Hastings, positive = positive, add_dlm = add_dlm)
+      
       current_state = out$value
     }
+    
     current_state = current_state
+    
     # sample
     for(i in 1:iter) {
-      for(j in 1:thin) {
-        out = step(y, current_state, h, scale, Hastings, MALA)
-        current_state = out$value
+      # Chain thinning
+      out = step(y = y, prev = current_state, h = h, scale = scale, 
+                 Hastings = Hastings, positive = positive, add_dlm = add_dlm)
+      
+      current_state = out$value
+      
+      if(out$accepted == 0){
+        for(j in 1:thin) {
+          out = step(y = y, prev = current_state, h = h, scale = scale, 
+                     Hastings = Hastings, positive = positive, add_dlm = add_dlm)
+          
+          current_state = out$value
+          
+          if(out$accepted == 1)
+            break
+        } 
       }
-      results = rbind(results, c(out$value, out$accepted))
+       if(dlm::is.dlm(add_dlm)){
+         results = rbind(results, c(k, out$accepted, out$value, out$mu))
+       }else{
+         results = rbind(results, c(k, out$accepted, out$value))
+       }
+      
+      chain_progress(i, refresh, iter, k, iter_seq)
     }
    post = rbind(post,results) 
   }
+  print(Sys.time() - start)
+  
   row.names(post) = NULL
   post = as.data.frame(post)
-  post$.chain = sort(rep(1:chains, iter))
-  
   return(post)
 }
 
@@ -90,18 +114,32 @@ sampling <- function(y,chains = 4, iter = 5000, scale = 0.5, thin = 0,
 #' 
 #' @return a vector with the proposed jump
 #' 
-step <- function(y, prev, h = 1, scale, Hastings = TRUE, MALA = FALSE) {
+step <- function(y, prev, h = 1, scale, Hastings = TRUE, #MALA = FALSE,
+                 positive = positive, add_dlm = NULL) {
+  
+  if(dlm::is.dlm(add_dlm)){
+    mu_prop = ffbs(y, G = add_dlm$GG, FF = t(add_dlm$FF), V = add_dlm$V, 
+                   W = add_dlm$W, m0 = add_dlm$m0, C0 = add_dlm$m0,iter = 1)
+    mu_prop = mu_prop$ft
+  }else{
+    mu_prop = 0
+  }
   
   u  =  runif(1)
   
-  ml1 = mala_step(x = prev, h = h, scale = scale, MALA = MALA)
+  #ml1 = mala_step(x = prev, h = h, scale = scale, MALA = MALA)
   
-  prop = rjump(prev + ml1, scale)
+  prop = rjump(prev,#+ ml1, 
+               scale, positive = positive)
   
-  ml2 = mala_step(x = prop, h = h, scale = scale, MALA = MALA)
+  #ml2 = mala_step(x = prop, h = h, scale = scale, MALA = MALA)
   
-  t1 = target(y, prop) + Hastings*djump(prev, prop + ml1, scale)
-  t2 = target(y, prev) + Hastings*djump(prop, prev + ml2, scale)
+  #t1 = target(y - mu_prop, prop) + Hastings*djump(prev, prop + ml1, scale)
+  #t2 = target(y - mu_prop, prev) + Hastings*djump(prop, prev + ml2, scale)
+  
+  t1 = target(y - mu_prop, prop) + Hastings*djump(prev, prop, scale)
+  t2 = target(y - mu_prop, prev) + Hastings*djump(prop, prev, scale)
+  
   accept_prob = exp(t1 - t2)
   accept_prob = ifelse(is.na(accept_prob),0,accept_prob)
   
@@ -114,6 +152,11 @@ step <- function(y, prev, h = 1, scale, Hastings = TRUE, MALA = FALSE) {
   }
   
   out = list(value = value, accepted = accepted)
+  
+  if(dlm::is.dlm(add_dlm)){
+    out$mu = mu_prop
+  }
+
   return(out)
 }
 
@@ -128,10 +171,15 @@ step <- function(y, prev, h = 1, scale, Hastings = TRUE, MALA = FALSE) {
 #' @return a vector following a Gaussian distribution of dimension d,
 #' with mean = prop, and covariance matrix C = scale.
 #' 
-rjump <- function(loc, scale){
+rjump <- function(loc, scale, positive = NULL){
   d = length(loc)
-  x = as.numeric(scale%*%rnorm(n = d))
-  return(x + loc)
+  x = as.numeric(scale%*%rnorm(n = d)) + loc
+  
+  if(!is.null(positive)){
+    if(any(x[positive] <= 0)) 
+      x[positive] = abs(x[positive])
+  }
+  return(x)
 }
 
 #' Evaluate the density of a Gaussian distribution used as Jump density
@@ -261,17 +309,18 @@ mala_step <-function(x, h = 1, scale, MALA = FALSE){
 #'   mu_t = G mu_{t-1} + vt, vt ~ N(0,V)
 #'   y0 ~ N(m0,C0)
 #'   
-#' The function computes the poserior of the states parameters
+#' The function computes the posterior of the states parameters
 #' p(mu_t | y1,y2,...,yt)
 #' 
 #' @param y a matrix of dimensions of k columns and n rows containing 
 #' a sample of  `n` elements `y` of dimension `m`.
 #' @param m0 is the mean vector [k] with mean for the prior of the y0.
 #' @param C0 is the covariance matrix [k,k] with the the initial value y0
-#' @param FF is the link matrix between states (mu_t) and observations (yt)
-#' @param G the transition matrix of dimension `kxk` for the states equation.
-#' @param samples an integer with the amount of samples for approximating the
-#' latent distribution of mu_t | y_t.
+#' @param FF is the link matrix between states (mu_t) and observations (yt),
+#' of dimension `k x m`.
+#' @param G the transition matrix of dimension `k x k` for the states equation.
+#' @param V the covariance matrix of dimension `m x m` for the observations.
+#' @param W the covariance matrix of dimension `k x k` for the states.
 #' 
 #' @author Asael Alonzo Matamoros
 #' 
@@ -373,4 +422,294 @@ forward_filter<-function(y, G = 1, FF = 1, V = 1, W = 1, m0 = 0, C0 = 1){
   return(pp)
 }
 
+#' Backward Sampling
+#' 
+#' Obtain a sample for the full posterior of $m0,m1,m2,...m_n$
+#' when the model is a constant DLM as:
+#'   yt = FF mu_t + et, et ~ N(0,W)
+#'   mu_t = G mu_{t-1} + vt, vt ~ N(0,V)
+#'   y0 ~ N(m0,C0)
+#'   
+#' The function computes the full posterior of the states parameters
+#' p(m0,m1,m2,..., m_n | y1,y2,...,yt)
+#' 
+#' @param mt a matrix with `n` and `k` rows with the marginal posterior means
+#'  for P(m_t|y1,y2,...,y_n).
+#' @param Ct a list with the marginal posterior covariance matrices [k,k] for
+#'  P(m_t|y1,y2,...,y_n).
+#' @param G the transition matrix of dimension `k x k` for the states equation.
+#' @param W the covariance matrix of dimension `k x k` for the states.
+#' @param iter ran integer with the amount of samples for approximating the
+#' latent distribution of mu_t | y_t.
+#' 
+#' @author Asael Alonzo Matamoros
+#' 
+#' @return Returns an array of dimensions [n, k, iter] with the samples for the
+#' full posterior of m1, m2, m3, ...m_n, where:
+#'  
+#'   - n is the amount of observations
+#'   - k the dimension of every m_t
+#'   _ iter the amount of desired samples.
+#'
+backward_sampling <-function(mt, Ct, G = 1, W = 1, iter = 1){
+  k = ncol(mt)
+  n = nrow(mt)
+  
+  if(k == 1){
+    if(length(G) != k)
+      stop("Error: G debe ser un numero real positivo")
+    
+    if(length(W) != k)
+      stop("Error: W debe ser un numero real positivo")
+    
+  }else{
+    if(any(dim(G) != k))
+      stop("Error: G debe ser una matriz de k X k")
+    
+    if(any(dim(W) != k))
+      stop("Error: W debe ser una matriz de k X k")
+  }
+  
+  theta = array(0,dim = c(iter, n, k))
+  
+  # Ultimo tiempo
+  theta[ ,n ,] = mvtnorm::rmvnorm(n = iter,
+                                 mean = mt[n,],
+                                 sigma = Ct[[n]])
+  for(i in (n-1):1){
+    A = Ct[[i]]%*% t(G)
+    Q = solve(G %*%A + W)
+    
+    H = Ct[[i]] - A%*%Q%*%t(A)
+    
+    for(j in 1:iter){
+      h = mt[i, ] + A%*%Q%*%(theta[j, i+1 , ] - G%*%mt[i, ])
+      theta[j, i, ] = mvtnorm::rmvnorm(n = 1, mean = h, sigma = H)
+    }
+  }
+  return(theta)
+}
+#' Backward Sampling
+#' 
+#' Obtain a sample for the full posterior of $m0,m1,m2,...m_n$
+#' when the model is a constant DLM as:
+#'   yt = FF mu_t + et, et ~ N(0,W)
+#'   mu_t = G mu_{t-1} + vt, vt ~ N(0,V)
+#'   y0 ~ N(m0,C0)
+#'   
+#' The function computes the full posterior of the states parameters
+#' p(m0,m1,m2,..., m_n | y1,y2,...,yt)
+#' 
+#' @param y a matrix of dimensions of k columns and n rows containing 
+#' a sample of  `n` elements `y` of dimension `m`.
+#' @param m0 is the mean vector [k] with mean for the prior of the y0.
+#' @param C0 is the covariance matrix [k,k] with the the initial value y0
+#' @param FF is the link matrix between states (mu_t) and observations (yt),
+#' of dimension `k x m`.
+#' @param G the transition matrix of dimension `k x k` for the states equation.
+#' @param V the covariance matrix of dimension `m x m` for the observations.
+#' @param W the covariance matrix of dimension `k x k` for the states.
+#' @param ite ran integer with the amount of samples for approximating the
+#' latent distribution of mu_t | y_t.
+#' 
+#' @author Asael Alonzo Matamoros
+#' 
+#' @return Returns a list with two arrays storing  samples of the posterior
+#' for: 
+#' 
+#'  - mu0,mu1,mu2,...mu_n
+#'  - f_1,f_2,f3,...,f_n
+#'  
+#' Each array has dimension [iter, n, k], where:
+#'  
+#'   - iter the amount of desired samples.
+#'   - n is the amount of observations
+#'   - k the dimension of every m_t
+#'
+ffbs<-function(y, G = 1, FF = 1, V = 1, W = 1, 
+               m0 = 0, C0 = 100, iter = 1){
+ 
+  if(is.matrix(y)){
+    n = nrow(y)
+    m = ncol(y)
+  }else{
+    n = length(y)
+    m = 1
+  }
+  
+  if(is.matrix(G)){
+    k = ncol(G)
+  }else{
+    k = 1
+  }
+  
+  kf = forward_filter(y, G = G, FF = FF, V = V, W = W,
+                      m0 = m0, C0 = C0)
+  
+  mu = backward_sampling(mt = kf$mt,Ct = kf$Ct,G = G,
+                         W = W, iter = iter)
 
+  forecast <- function(x) t(FF)%*% G %*% x
+  
+  if(iter == 1){
+    
+    if(k > 1){
+      ft = t(apply(mu[1, , ], 1, FUN = forecast))
+    }else{
+      ft = forecast(mu[1, , ])
+    }
+    
+    if(m > 1){
+      ft = ft[1:n + 1, ]
+    } else{
+      ft = ft[1:n + 1]
+    }
+  }else{
+    ft = array(0,dim = c(iter, n, m))
+    
+    for (i in 1:iter) {
+
+      if(k > 1){
+        ft_temp = t(apply(mu[i, , ], 1, FUN = forecast))
+      }else{
+        ft_temp = forecast(mu[i, , ])
+      }
+      
+      if(m > 1){
+        ft[i, ,] = ft_temp[1:n + 1,]
+      }else{
+        ft[i, , ] = ft_temp[1:n + 1]
+      }
+    }
+  }
+  theta = list(mu = mu, ft = ft)
+  
+  return(theta)
+}
+#' Simulate a DLM using a Gaussian linear SSM
+#' 
+#' Obtain a sample for yt and mt, using the following
+#' equations
+#' 
+#'   yt = FF mu_t + et, et ~ N(0,W)
+#'   mu_t = G mu_{t-1} + vt, vt ~ N(0,V)
+#'   y0 ~ N(m0,C0)
+#'   
+#' The function computes the posterior of the states parameters
+#' p(mu_t | y1,y2,...,yt)
+#' 
+#' @param n an integer with the amount of samples for the process `y`. 
+#' @param m0 is the mean vector [k] with mean for the prior of the y0.
+#' @param C0 is the covariance matrix [k,k] with the the initial value y0
+#' @param FF is the link matrix between states (mu_t) and observations (yt),
+#' of dimension `k x m`.
+#' @param G the transition matrix of dimension `k x k` for the states equation.
+#' @param V the covariance matrix of dimension `m x m` for the observations.
+#' @param W the covariance matrix of dimension `k x k` for the states.
+#' 
+#' @author Asael Alonzo Matamoros
+#' 
+#' @return Returns a list with parameters of the posterior of mu_t at every step
+#' 
+rdlm <-function(n = 10, G = 1, FF = 1, m0 = 0, C0 = 100, V = 1, W = 1){
+  
+  if(is.matrix(V)){
+    m = ncol(V)
+    V = chol(V)
+  }
+  else{
+    m = 1
+    V = sqrt(V)
+  }
+  
+  if(is.matrix(G)){
+    k = ncol(G)
+    
+    if(any(length(m0) != k))
+      stop("Formato invalido para m0, debe ser un vector de tamanio k")
+    
+    if(any(dim(C0) != k))
+      stop("Formato invalido para C0, debe ser una matriz de k x k")
+    
+    if(any(dim(FF) != c(k,m) ))
+      stop("Formato invalido para FF, debe ser una matriz de k x m")
+    
+    if(any(dim(W) != k))
+      stop("Formato invalido para W, debe ser una matriz de k x k")
+    V = chol(V)
+  }else{
+    if(is.numeric(G) && length(G) == 1){
+      k = 1
+      
+      if(!is.numeric(m0) || length(m0) != 1)
+        stop("Formato invalido para m0, debe ser un numero real")
+      
+      if(!is.numeric(C0) || length(C0) != 1)
+        stop("Formato invalido para C0, debe ser un numero real positivo")
+      
+      if(!is.numeric(FF) || length(FF) != 1)
+        stop("Formato invalido para FF, debe ser un numero real")
+      
+      if(!is.numeric(W) || length(W) != 1)
+        stop("Formato invalido para W, debe ser un numero real positivo")
+     
+      W = sqrt(W) 
+    }else{
+      stop("Formato invalido para G, debe ser una matriz o un numero real") 
+    }
+  }
+  y  = matrix(0,nrow = n, ncol = m)
+  mt = matrix(0,nrow = n +1, ncol = k) 
+  mt[1, ] = m0
+  
+  for(i in 1:n + 1){
+    mt[i, ] = G %*% mt[i-1,] + W%*%rnorm(k)
+    y[i-1, ] = FF%*% mt[i, ] + V%*%rnorm(m)
+  }
+  list(y = y, mt = mt)
+}
+
+#' Generate values for a GEV distribution 
+#' when sampling for a vector of parameters index in
+#' time.
+#' 
+#'   y[i] ~ GEV(loc[i],sigma[i],k[i])
+#'   
+#' Plots density and Ribbon plot for a univariate data set
+#' 
+#' @param x a vector with an univariate data set.
+#' @param name a string with the data-set's name.
+#' @param color a string for specifying a color.
+#' 
+#' @author Asael Alonzo Matamoros
+#' 
+#' @return Returns a cowplot object with a plot grid with 2 columns
+#' 
+plot_ts <- function(x, name = NULL, color = "darkred"){
+  g1 = ggplot(data.frame(x),aes(x = x))+geom_density(fill = color)+
+    labs(x = name, y = "densidad",title = paste("Densidad de", name))
+  
+  p1 = forecast::autoplot(ts(x),col = color) + labs(x = "tiempo", y = name,
+                                        title = paste("Serie de tiempo para",name))
+  
+  cowplot::plot_grid(g1,p1,nrow = 2)
+}
+
+#' Internal function for printing the iteration progress
+#' 
+#' prints a message with the chains and iteration progress
+#' 
+#' @param i an integer with the current iteration.
+#' @param refresh a bool indicating if printing the chains.
+#' @param iter an integer with the total amount of iteration per chain.
+#' @param iter_seq a sequence with the progress multiples
+#' 
+#' @author Asael Alonzo Matamoros
+#' 
+chain_progress <-function(i, refresh, iter, chain, iter_seq){
+  if(refresh){
+    if(any(i == iter_seq)){
+      print(paste0("chain: ",chain," iteration ",i," / ", iter))
+    }
+  }
+}
