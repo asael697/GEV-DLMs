@@ -47,7 +47,8 @@ Ahora bien, previo a la estimacion de los parametros, actualizamos las funciones
 ```{r}
 # Estimacion de la log-verosimilitud
 loglik <- function(y,theta){
-    d = sum(dnorm(x = y,mean = theta[1],sd = theta[2],log = TRUE))
+    z = y - 5
+    d = sum(dnorm(x = y,mean = 0,sd = theta[1],log = TRUE))
     d = ifelse(is.na(d),-10^(64),d)
    return(sum(d))
 }
@@ -55,13 +56,12 @@ loglik <- function(y,theta){
 # Calculo de la log prior logP(theta)
 log_prior <- function(theta){
   d1 = dnorm(theta[1],log = TRUE)
-  d2 = dlnorm(theta[2],meanlog = 1,log = TRUE)
-  return(d1 + d2)
+  return(d1)
 }
 
 # Generacion de los valores iniciales
 inits <- function(y,d = 2){
-  c(rnorm(1),rlnorm(1,meanlog = 1))
+  c(rlnorm(1,meanlog = 1))
 }
 ```
 

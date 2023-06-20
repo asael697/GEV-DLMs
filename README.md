@@ -27,7 +27,7 @@ Los datos se simulan mediante el siguiente codigo:
     ggplot(data.frame(y),aes(x = y))+geom_density(fill = "darkred")+
       labs(x = "y",y = "conteo",title = "Histograma de los datos simulados y")
 
-![](Readme_files/figure-markdown_strict/unnamed-chunk-2-1.png)
+![](Figures/unnamed-chunk-2-1.png)
 
 Ahora bien, previo a la estimacion de los parametros, actualizamos las funciones `loglik()`, `log_prior()` y `inits()` para que calculen la verosimilitud, el logaritmo de la prior y valores iniciales, de forma correcta. Estas funciones son necesarias para el salto de Metropolis (`metropolis_step`) y para la iniciacion correcta del algoritmo (`metropolis_sampler()`). 
 
@@ -79,7 +79,7 @@ Ademas, las cadenas y densidades de las posterioris muestran que las cadenas se 
 
     mcmc_combo(post1_df,pars = c("mu","sigma","k"))
 
-![](Readme_files/figure-markdown_strict/unnamed-chunk-6-1.png)
+![](Figures/unnamed-chunk-6-1.png)
 
 Revisar el ajuste de los datos es una buena praxis para validar los supuestos del modelo, para eso es necesario realizar posterior predictive checks. En este caso, extraemos 500 simulaciones aleatorias, y las comparamos con los datos reales. El gráfico siguiente muestra que el modelo provee un buen ajuste de los datos.
 
@@ -95,7 +95,7 @@ Revisar el ajuste de los datos es una buena praxis para validar los supuestos de
 
     ppc_dens_overlay(y = y,yrep = y_rep_try)
 
-![](Readme_files/figure-markdown_strict/unnamed-chunk-7-1.png)
+![](Figures/unnamed-chunk-7-1.png)
 
 Realizamos validacion cruzada para determinar el ajuste del modelo, para eso es necesario computar la matriz de de log-verosimilitud, al aproximar la elpd (Expected log-predictive density) notamos que no hay advertencias de un mal ajusto de los valores de pareto, por lo tanto aceptamos el modelo propuesto.
 
@@ -153,7 +153,7 @@ Los datos se simulan mediante el siguiente código:
     g2 = plot_ts(y, name = "y",color = "darkblue")
     cowplot::plot_grid(g1,g2,ncol = 2)
 
-![](Readme_files/figure-markdown_strict/unnamed-chunk-9-1.png) 
+![](Figures/unnamed-chunk-9-1.png) 
 
 Para simular los datos primero simulamos las locaciones en cada tiempo usando un $DLM(G = 1, F = 1,V =1, W = 0.1)$ constante, extraemos los valores de $\mu_t$, para simular las observaciones mediante la ecuación la anterior y los parametros de escala y forma se simularon con variables lognormal y normal estandard respectivamente.
 
@@ -230,7 +230,7 @@ Observamos que las densidad y las trazas de las cadenas, en ambos casos no se di
     color_scheme_set("viridisB")
     mcmc_combo(post1_df,pars = c("sigma","k"))
 
-![](Readme_files/figure-markdown_strict/unnamed-chunk-14-1.png)
+![](Figures/unnamed-chunk-14-1.png)
 
 Seguidamente realizamos `posterior predictive checks` para revisar el ajuste de nuestro modelo el siguiente algoritmo genera muestras de nuestro modelo usando las posteriors de nuestros parámetros y la media a posterior para las locaciones. Por costos computaciones, solo utilizaremos una muestra de 500 muestras que extraemos del MCMC para hacer revisar el ajuste.
 
@@ -248,7 +248,7 @@ Seguidamente realizamos `posterior predictive checks` para revisar el ajuste de 
 
     cowplot::plot_grid(g1,g2,ncol = 1)
 
-![](Readme_files/figure-markdown_strict/unnamed-chunk-15-1.png)
+![](Figures/unnamed-chunk-15-1.png)
 
 de los datos, pero se pudo recuperar el comportamiento temporal de los datos. Finalmente calculamos la log-verosimilitud y estimamos la log-predictiva usando validación cruzada. 
 
@@ -320,7 +320,7 @@ modelo.
     color_scheme_set("blue")
     mcmc_combo(post2_df,pars = c("sigma","k"))
 
-![](Readme_files/figure-markdown_strict/unnamed-chunk-19-1.png)
+![](Figures/unnamed-chunk-19-1.png)
 
 Seguidamente realizamos `posterior predictive checks` para revisar el
 ajuste de nuestro modelo el siguiente algoritmo genera muestras de
@@ -344,7 +344,7 @@ hacer revisar el ajuste.
 
     cowplot::plot_grid(g1,g2,ncol = 1)
 
-![](Readme_files/figure-markdown_strict/unnamed-chunk-20-1.png)
+![](Figures/unnamed-chunk-20-1.png)
 
 El gráfico superior muestra que la sub-estimación de los parámetros de
 forma y escala generan un ajuste pobre de la densidad de los datos, pero
