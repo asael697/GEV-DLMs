@@ -239,17 +239,7 @@ FFF<-c(1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0)
 
 
 for (i in 1:18) {
-  temp_1 = fgfg[1,i]
-  j = 2
-  contador = 2
-  #print(i)
-  while( (j != 0)  && (contador <= f1) ){
-    temp_1 = rbind(temp_1, fgfg[contador,i])   
-    contador = contador + 1
-    j=fgfg[contador,i]
-    
-  }
-  
+  temp_1 = na.exclude(fgfg[,i])
   
   mat <- diag(c(1000, 50, 100))  #matriz diagonal
   
