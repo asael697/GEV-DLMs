@@ -489,7 +489,7 @@ backward_sampling <-function(mt, Ct, G = 1, W = 1, iter = 1){
   }
   return(theta)
 }
-#' Backward Sampling
+#' Forward Filter Backward Sampling
 #' 
 #' Obtain a sample for the full posterior of $m0,m1,m2,...m_n$
 #' when the model is a constant DLM as:
@@ -509,16 +509,18 @@ backward_sampling <-function(mt, Ct, G = 1, W = 1, iter = 1){
 #' @param G the transition matrix of dimension `k x k` for the states equation.
 #' @param V the covariance matrix of dimension `m x m` for the observations.
 #' @param W the covariance matrix of dimension `k x k` for the states.
-#' @param ite ran integer with the amount of samples for approximating the
+#' @param iter ran integer with the amount of samples for approximating the
 #' latent distribution of mu_t | y_t.
+#' @param forecast a bool value that return the forecast vector by transforming
+#' the latent variables f_t = FF * mu_t.
 #' 
 #' @author Asael Alonzo Matamoros
 #' 
-#' @return Returns a list with two arrays storing  samples of the posterior
+#' @return Returns an array storing  samples of the posterior
 #' for: 
 #' 
-#'  - mu0,mu1,mu2,...mu_n
-#'  - f_1,f_2,f3,...,f_n
+#'  - mu0,mu1,mu2,...mu_n if `forecast == FALSE`
+#'  - f_1,f_2,f3,...,f_n. `forecast == TRUE`
 #'  
 #' Each array has dimension [iter, n, k], where:
 #'  
@@ -527,7 +529,7 @@ backward_sampling <-function(mt, Ct, G = 1, W = 1, iter = 1){
 #'   - k the dimension of every m_t
 #'
 ffbs<-function(y, G = 1, FF = 1, V = 1, W = 1, 
-               m0 = 0, C0 = 100, iter = 1){
+               m0 = 0, C0 = 100, iter = 1, forecast = TRUE){
  
   if(is.matrix(y)){
     n = nrow(y)
@@ -549,6 +551,10 @@ ffbs<-function(y, G = 1, FF = 1, V = 1, W = 1,
   mu = backward_sampling(mt = kf$mt,Ct = kf$Ct,G = G,
                          W = W, iter = iter)
 
+  if(!forecast){
+    return(mu)
+  }
+  
   forecast <- function(x) t(FF)%*% G %*% x
   
   if(iter == 1){
@@ -582,9 +588,7 @@ ffbs<-function(y, G = 1, FF = 1, V = 1, W = 1,
       }
     }
   }
-  theta = list(mu = mu, ft = ft)
-  
-  return(theta)
+  return(ft)
 }
 #' Simulate a DLM using a Gaussian linear SSM
 #' 
