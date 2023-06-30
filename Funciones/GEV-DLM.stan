@@ -2,6 +2,7 @@ data {
   int<lower=0> n;
   int<lower=0> d;
   vector[n] y;
+  vector[d] FF;
   vector[d] m0;
   matrix[d,d] G;
   matrix[d,d] C0;
@@ -27,7 +28,7 @@ transformed parameters{
   for(i in 1:n){
      mt[i+1] = G*mt[i] + W*nu[i];
      
-     mu[i] = sum(mt[i]);
+     mu[i] = sum(FF.* mt[i]);
      g_t[i] = mu[i] + scale*pow(k,-1)*(exp(k*eta[i]) - 1);
   }
 }
