@@ -1,10 +1,14 @@
 source("Espacial/Preliminar.R")
 
+Estaciones <- readxl::read_excel("Datos/Estaciones.xlsx")
+
+Estaciones <- as.matrix(Estaciones)
+
 est = 1
-S_1 =  as.numeric(na.exclude(Estaciones$S1))
+S_1 = na.exclude(Estaciones[,est])
 
 n = length(S_1)
-iter = 100
+iter = 5000
 
 ## Construccion del DLM 
 dlm_temp = dlm::dlm(GG = I, FF = t(Kij[1,]), V = 1, W = I, m0 = rep(0,18), 

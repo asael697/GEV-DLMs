@@ -6,7 +6,7 @@ library(bayesplot)
 library(posterior)
 
 load("Datos/K_matrix.Rdata")
-Estaciones <- read_excel("Datos/Estaciones.xlsx")
+Estaciones <- readxl::read_excel("Datos/Estaciones.xlsx")
 
 loglik <- function(y,theta){
   d = SpatialExtremes::dgev(y, loc = 0, scale = theta[1],
