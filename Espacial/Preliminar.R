@@ -1,12 +1,18 @@
 
-source("funciones/functions.R")
 
-library(ggplot2)
-library(bayesplot)
+library(cmdstanr)
+library(cowplot)
 library(posterior)
+library(bayesplot)
+library(ggplot2)
+library(dlm)
+
 
 load("Datos/K_matrix.Rdata")
 Estaciones <- readxl::read_excel("Datos/Estaciones.xlsx")
+Estaciones <- as.matrix(Estaciones)
+mod <- cmdstan_model("Espacial/gev.stan")
+mod1<- cmdstan_model("Espacial/gev1.stan")
 
 loglik <- function(y,theta){
   d = SpatialExtremes::dgev(y, loc = 0, scale = theta[1],
